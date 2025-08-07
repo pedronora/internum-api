@@ -23,6 +23,16 @@ taskipy = "^1.14.1"
 ruff = "^0.12.7"
 commitizen = "^4.8.3"
 
+[tool.taskipy.tasks]
+lint = 'ruff check'
+pre_format = 'ruff check --fix'
+format = 'ruff format'
+run = 'fastapi dev fast_zero/app.py'
+pre_test = 'task lint'
+test = 'pytest -s -x --cov=fast_zero -vv'
+post_test = 'coverage html'
+commit = 'cz commit'
+
 [tool.ruff]
 line-length = 79
 extend-exclude = ['migrations']
@@ -38,14 +48,3 @@ select = ['I', 'F', 'E', 'W', 'PL', 'PT']
 [tool.pytest.ini_options]
 pythonpath = "."
 addopts = '-p no:warnings'
-
-
-[tool.taskipy.tasks]
-lint = 'ruff check'
-pre_format = 'ruff check --fix'
-format = 'ruff format'
-run = 'fastapi dev fast_zero/app.py'
-pre_test = 'task lint'
-test = 'pytest -s -x --cov=fast_zero -vv'
-post_test = 'coverage html'
-commit = 'cz commit'
