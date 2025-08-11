@@ -14,10 +14,14 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(prefix='/api/v1', tags=['API'])
 
 
-@router.get('/status', response_model=Status, responses= {
-    HTTPStatus.NOT_FOUND: {"model": ErrorResponse},
-    HTTPStatus.INTERNAL_SERVER_ERROR: {"model": ErrorResponse},
-})
+@router.get(
+    '/status',
+    response_model=Status,
+    responses={
+        HTTPStatus.NOT_FOUND: {'model': ErrorResponse},
+        HTTPStatus.INTERNAL_SERVER_ERROR: {'model': ErrorResponse},
+    },
+)
 async def status_db(session: Session):
     try:
         result = await session.execute(
