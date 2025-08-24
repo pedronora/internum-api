@@ -1,0 +1,61 @@
+name: Lint and Test
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint_and_test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v2
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Create .env.development for tests
+        run: |
+          cat > .env.development << 'EOF'
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_USER=local_user
+          POSTGRES_DB=local_db
+          POSTGRES_PASSWORD=local_password
+          DATABASE_URL=postgres://local_user:local_password@localhost:5432/local_db
+          EOF
+
+      - name: Services up
+        run: |
+          poetry run task servicesUp
+
+      - name: Wait for PostgreSQL
+        run: |
+          cd internum/infra
+          for i in {1..10}; do
+            if docker compose exec database pg_isready -U local_user; then
+              echo "PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL... attempt $i"
+            sleep 3
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Run tests
+        run: poetry run task test
+
+      - name: Services stop
+        run: poetry run task servicesStop
