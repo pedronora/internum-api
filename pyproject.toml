@@ -34,9 +34,9 @@ run = 'bash internum/infra/orchestrate.sh'
 servicesUp = 'docker compose -f internum/infra/compose.yaml up -d'
 servicesStop = 'docker compose -f internum/infra/compose.yaml stop'
 servicesDown = 'docker compose -f internum/infra/compose.yaml down'
-pre_test = 'task lint'
+pre_test = 'task lint && task servicesUp'
 test = 'pytest -s -x --cov=internum -vv'
-post_test = 'coverage html'
+post_test = 'coverage html && task servicesDown'
 commit = 'cz commit'
 
 [tool.ruff]
