@@ -36,26 +36,6 @@ jobs:
           DATABASE_URL=postgres://local_user:local_password@localhost:5432/local_db
           EOF
 
-      - name: Services up
-        run: |
-          poetry run task servicesUp
-
-      - name: Wait for PostgreSQL
-        run: |
-          cd internum/infra
-          for i in {1..10}; do
-            if docker compose exec database pg_isready -U local_user; then
-              echo "PostgreSQL is ready!"
-              exit 0
-            fi
-            echo "Waiting for PostgreSQL... attempt $i"
-            sleep 3
-          done
-          echo "PostgreSQL failed to start"
-          exit 1
-
       - name: Run tests
         run: poetry run task test
 
-      - name: Services stop
-        run: poetry run task servicesStop
