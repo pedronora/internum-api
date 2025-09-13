@@ -23,7 +23,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def create_user(session: Session, user: UserCreate):
     db_user = await session.scalar(
         select(User).where(
-            (User.username == user.username) | User.email == user.email
+            (User.username == user.username) | (User.email == user.email)
         )
     )
 
