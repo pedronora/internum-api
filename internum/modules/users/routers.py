@@ -1,16 +1,52 @@
+from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
 from internum.modules.users.models import User
-from internum.modules.users.schemas import FilterPage, UserList
+from internum.modules.users.schemas import (
+    FilterPage,
+    UserCreate,
+    UserList,
+    UserRead,
+)
 
 router = APIRouter(prefix='/users', tags=['Users'])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+@router.post('/', status_code=HTTPStatus.CREATED, response_model=UserRead)
+async def create_user(session: Session, user: UserCreate):
+    db_user = await session.scalar(
+        select(User).where(
+            (User.username == user.username) | User.email == user.email
+        )
+    )
+
+    if db_user:
+        if db_user.username == user.username:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail='Usuário já existente.',
+            )
+        elif db_user.email == user.email:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail='Email já existente.',
+            )
+
+    data = user.model_dump()
+    db_user = User(**data)
+
+    session.add(db_user)
+    await session.commit()
+    await session.refresh(db_user)
+
+    return db_user
 
 
 @router.get('/', response_model=UserList)
