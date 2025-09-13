@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from datetime import datetime
 
+import factory
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -10,7 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from internum.app import app
 from internum.core.database import get_session
 from internum.core.settings import Settings
-from internum.modules.users.models import table_registry
+from internum.modules.users.enums import Role, Setor
+from internum.modules.users.models import User, table_registry
+
+
+class UserFactory(factory.Factory):
+    class Meta:
+        model = User
+
+    name = factory.Sequence(lambda n: f'User_{n}')
+    username = factory.LazyAttribute(lambda obj: obj.name.lower())
+    password = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
+    email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
+    role = Role.USER
+    setor = Setor.REGISTRO
+    subsetor = 'Análise'
 
 
 @pytest_asyncio.fixture
@@ -59,3 +74,14 @@ def _mock_db_time(*, model, time=datetime(2025, 5, 21)):
 @pytest.fixture
 def mock_db_time():
     return _mock_db_time
+
+
+@pytest_asyncio.fixture
+async def user(session):
+    user = UserFactory()
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    return user

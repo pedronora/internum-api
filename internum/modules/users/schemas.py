@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from internum.modules.users.enums import Role, Setor
 
@@ -23,6 +23,7 @@ class UserRead(UserBase):
     id: int
     created_at: datetime
     updated_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserList(BaseModel):
