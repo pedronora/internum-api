@@ -61,3 +61,21 @@ async def read_users(
     )
     users = query.all()
     return {'users': users}
+
+
+@router.get('/{user_id}', response_model=UserRead)
+async def get_user_by_id(
+    user_id: int,
+    session: Session,
+):
+    db_user = await session.scalar(
+        select(User).where((User.id == user_id) & (User.active))
+    )
+
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user_id}).',
+        )
+
+    return db_user
