@@ -123,3 +123,26 @@ async def update_user(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail=f'Erro interno ao atualizar usuário. {(e)}',
         )
+
+
+@router.delete('/{user_id}', status_code=HTTPStatus.NO_CONTENT)
+async def deactivate_user(
+    user_id: int,
+    session: Session,
+):
+    db_user = await session.scalar(select(User).where(User.id == user_id))
+
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user_id}).',
+        )
+
+    if not db_user.active:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f'Usuário com id ({user_id}) já está inativo.',
+        )
+
+    db_user.active = False
+    await session.commit()
