@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
@@ -12,6 +13,7 @@ from internum.modules.users.schemas import (
     UserCreate,
     UserList,
     UserRead,
+    UserUpdate,
 )
 
 router = APIRouter(prefix='/users', tags=['Users'])
@@ -79,3 +81,45 @@ async def get_user_by_id(
         )
 
     return db_user
+
+
+@router.put('/{user_id}', response_model=UserRead, status_code=HTTPStatus.OK)
+async def update_user(
+    user_id: int,
+    user_data: UserUpdate,
+    session: Session,
+):
+    db_user = await session.scalar(
+        select(User).where((User.id == user_id) & (User.active))
+    )
+
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user_id}).',
+        )
+
+    try:
+        update_data = user_data.model_dump(exclude_unset=True)
+
+        for field, value in update_data.items():
+            if hasattr(db_user, field):
+                setattr(db_user, field, value)
+
+        await session.commit()
+        await session.refresh(db_user)
+
+        return db_user
+
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='Username ou Email já existem.',
+        )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f'Erro interno ao atualizar usuário. {(e)}',
+        )

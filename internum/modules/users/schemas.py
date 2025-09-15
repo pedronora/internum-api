@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -28,6 +29,16 @@ class UserRead(UserBase):
 
 class UserList(BaseModel):
     users: list[UserRead]
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=4)
+    username: Optional[str] = Field(None, min_length=4)
+    email: Optional[EmailStr] = None
+    setor: Optional[Setor] = None
+    subsetor: Optional[str] = Field(None, min_length=4)
+    role: Optional[Role] = None
+    active: Optional[bool] = None
 
 
 class FilterPage(BaseModel):
