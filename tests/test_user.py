@@ -211,3 +211,27 @@ def test_update_user_case_sensitivity_email(client, user):
     response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
     assert response.status_code == HTTPStatus.OK
     assert response.json()['email'] == user.email.upper().lower()
+
+
+def test_deactivate_user_success(client, user):
+    response = client.delete(f'{ENDPOINT_URL}/{user.id}')
+
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    assert response.content == b''
+
+
+def test_deactivate_user_not_found(client):
+    response = client.delete(f'{ENDPOINT_URL}/9999')
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert 'Não encontrado usuário com id (9999).' == response.json()['detail']
+
+
+def test_deactivate_user_already_inactive(client, user_inactive):
+    response = client.delete(f'{ENDPOINT_URL}/{user_inactive.id}')
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert (
+        f'Usuário com id ({user_inactive.id}) já está inativo.'
+        == response.json()['detail']
+    )
