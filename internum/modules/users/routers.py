@@ -103,7 +103,7 @@ async def update_user(
         update_data = user_data.model_dump(exclude_unset=True)
 
         for field, value in update_data.items():
-            if hasattr(db_user, field):
+            if value is not None and hasattr(db_user, field):
                 setattr(db_user, field, value)
 
         await session.commit()

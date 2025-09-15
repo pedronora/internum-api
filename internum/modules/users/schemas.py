@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from internum.modules.users.enums import Role, Setor
 
@@ -14,6 +14,12 @@ class UserBase(BaseModel):
     subsetor: str
     role: Role = Role.USER
     active: bool = True
+
+    @field_validator('email', mode='before')
+    def normalize_email(cls, v):
+        if v and isinstance(v, str):
+            return v.strip().lower()
+        return v
 
 
 class UserCreate(UserBase):
@@ -39,6 +45,12 @@ class UserUpdate(BaseModel):
     subsetor: Optional[str] = Field(None, min_length=4)
     role: Optional[Role] = None
     active: Optional[bool] = None
+
+    @field_validator('email', mode='before')
+    def normalize_email(cls, v):
+        if v and isinstance(v, str):
+            return v.strip().lower()
+        return v
 
 
 class FilterPage(BaseModel):
