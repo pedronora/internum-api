@@ -11,6 +11,7 @@ from testcontainers.postgres import PostgresContainer
 
 from internum.app import app
 from internum.core.database import get_session
+from internum.core.security import get_password_hash
 from internum.modules.users.enums import Role, Setor
 from internum.modules.users.models import User, table_registry
 
@@ -84,10 +85,14 @@ def mock_db_time():
 @pytest_asyncio.fixture
 async def user(session):
     user = UserFactory()
+    plain_password = user.password
+
+    user.password = get_password_hash(plain_password)
 
     session.add(user)
     await session.commit()
     await session.refresh(user)
+    user.clean_password = plain_password
 
     return user
 
