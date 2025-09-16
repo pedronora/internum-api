@@ -25,20 +25,14 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-root
 
-      - name: Create .env.development for tests
-        run: |
-          cat > .env.development << 'EOF'
-          SECRET_KEY=your-secret-key
-          ALGORITHM=HS256
-          ACCESS_TOKEN_EXPIRE_MINUTES=30
-          POSTGRES_HOST=localhost
-          POSTGRES_PORT=5432
-          POSTGRES_USER=local_user
-          POSTGRES_DB=local_db
-          POSTGRES_PASSWORD=local_password
-          DATABASE_URL=postgres://local_user:local_password@localhost:5432/local_db
-          EOF
-
       - name: Run tests
         run: poetry run task test
-
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ALGORITHM: ${{ secrets.ALGORITHM }}
+          ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
