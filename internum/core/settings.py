@@ -6,6 +6,9 @@ class Settings(BaseSettings):
         env_file='.env.development', env_file_encoding='utf-8'
     )
 
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
     POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_USER: str
