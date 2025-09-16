@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
-from internum.core.security import get_password_hash
+from internum.core.security import get_current_user, get_password_hash
 from internum.modules.users.models import User
 from internum.modules.users.schemas import (
     FilterPage,
@@ -20,10 +20,15 @@ from internum.modules.users.schemas import (
 router = APIRouter(prefix='/users', tags=['Users'])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=UserRead)
-async def create_user(session: Session, user: UserCreate):
+async def create_user(
+    session: Session,
+    user: UserCreate,
+    current_user: CurrentUser,
+):
     db_user = await session.scalar(
         select(User).where(
             (User.username == user.username) | (User.email == user.email)
@@ -55,7 +60,9 @@ async def create_user(session: Session, user: UserCreate):
 
 @router.get('/', response_model=UserList)
 async def read_users(
-    session: Session, filter_users: Annotated[FilterPage, Query()]
+    session: Session,
+    filter_users: Annotated[FilterPage, Query()],
+    current_user: CurrentUser,
 ):
     query = await session.scalars(
         select(User)
@@ -71,6 +78,7 @@ async def read_users(
 async def get_user_by_id(
     user_id: int,
     session: Session,
+    current_user: CurrentUser,
 ):
     db_user = await session.scalar(
         select(User).where((User.id == user_id) & (User.active))
@@ -90,6 +98,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     session: Session,
+    current_user: CurrentUser,
 ):
     db_user = await session.scalar(
         select(User).where((User.id == user_id) & (User.active))
@@ -131,6 +140,7 @@ async def update_user(
 async def deactivate_user(
     user_id: int,
     session: Session,
+    current_user: CurrentUser,
 ):
     db_user = await session.scalar(select(User).where(User.id == user_id))
 
