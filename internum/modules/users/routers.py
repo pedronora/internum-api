@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
+from internum.core.security import get_password_hash
 from internum.modules.users.models import User
 from internum.modules.users.schemas import (
     FilterPage,
@@ -42,6 +43,7 @@ async def create_user(session: Session, user: UserCreate):
             )
 
     data = user.model_dump()
+    data['password'] = get_password_hash(data['password'])
     db_user = User(**data)
 
     session.add(db_user)
