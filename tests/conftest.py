@@ -60,6 +60,15 @@ def client(session):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def token(client, user):
+    response = client.post(
+        'api/v1/auth/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    return response.json()['access_token']
+
+
 @contextmanager
 def _mock_db_time(*, model, time=datetime(2025, 5, 21)):
     def fake_time_hook(mapper, connection, target):

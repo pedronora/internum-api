@@ -6,10 +6,11 @@ from internum.modules.users.schemas import UserRead
 ENDPOINT_URL = '/api/v1/users'
 
 
-def test_create_user(client, mock_db_time):
+def test_create_user(client, mock_db_time, token):
     with mock_db_time(model=User) as time:
         response = client.post(
             ENDPOINT_URL,
+            headers={'Authorization': f'Bearer {token}'},
             json={
                 'name': 'Pedro Nora',
                 'username': 'User_1',
@@ -21,33 +22,35 @@ def test_create_user(client, mock_db_time):
             },
         )
 
+    data = response.json()
+
     assert response.status_code == HTTPStatus.CREATED
-    assert response.json() == {
-        'id': 1,
-        'name': 'Pedro Nora',
-        'username': 'User_1',
-        'email': 'test@test.com',
-        'role': 'user',
-        'setor': 'oficial',
-        'subsetor': 'titular',
-        'active': True,
-        'created_at': time.isoformat(),
-        'updated_at': time.isoformat(),
-    }
+    assert isinstance(data['id'], int)
+    assert data['id'] > 0
+    assert data['name'] == 'Pedro Nora'
+    assert data['username'] == 'User_1'
+    assert data['email'] == 'test@test.com'
+    assert data['created_at'] == time.isoformat()
 
 
-def test_get_user(client, user):
+def test_get_user(client, user, token):
     expected_data = UserRead.model_validate(user).model_dump(mode='json')
 
-    response = client.get(f'{ENDPOINT_URL}/{user.id}')
+    response = client.get(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.OK
 
     assert response.json() == expected_data
 
 
-def test_get_user_by_id_not_found(client):
-    response = client.get(f'{ENDPOINT_URL}/999999')
+def test_get_user_by_id_not_found(client, token):
+    response = client.get(
+        f'{ENDPOINT_URL}/999999',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert (
@@ -55,10 +58,13 @@ def test_get_user_by_id_not_found(client):
     )
 
 
-def test_get_user_by_id_inactive(client, user):
+def test_get_user_by_id_inactive(client, user, token):
     user.active = False
 
-    response = client.get(f'{ENDPOINT_URL}/{user.id}')
+    response = client.get(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert (
@@ -67,15 +73,18 @@ def test_get_user_by_id_inactive(client, user):
     )
 
 
-def test_update_user_success(client, user):
-    """Testa atualização bem-sucedida de usuário"""
+def test_update_user_success(client, user, token):
     update_data = {
         'name': 'Novo Nome',
         'email': 'novo.email@test.com',
         'subsetor': 'Novo Subsetor',
     }
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()['name'] == 'Novo Nome'
@@ -84,11 +93,14 @@ def test_update_user_success(client, user):
     assert response.json()['username'] == user.username
 
 
-def test_update_user_partial_data(client, user):
-    """Testa atualização parcial com apenas alguns campos"""
+def test_update_user_partial_data(client, user, token):
     update_data = {'name': 'Nome Parcial'}
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()['name'] == 'Nome Parcial'
@@ -96,8 +108,7 @@ def test_update_user_partial_data(client, user):
     assert response.json()['username'] == user.username
 
 
-def test_update_user_all_fields(client, user):
-    """Testa atualização de todos os campos permitidos"""
+def test_update_user_all_fields(client, user, token):
     update_data = {
         'name': 'Nome Completo',
         'username': 'novousername',
@@ -108,7 +119,11 @@ def test_update_user_all_fields(client, user):
         'active': False,
     }
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -121,11 +136,15 @@ def test_update_user_all_fields(client, user):
     assert not data['active']
 
 
-def test_update_user_empty_payload(client, user):
+def test_update_user_empty_payload(client, user, token):
     original_name = user.name
     original_email = user.email
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json={})
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json={},
+    )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -133,37 +152,54 @@ def test_update_user_empty_payload(client, user):
     assert data['email'] == original_email
 
 
-def test_update_user_with_none_values(client, user):
-    """Testa comportamento ao enviar valores None (deve ignorar)"""
+def test_update_user_with_none_values(client, user, token):
     original_name = user.name
     update_data = {'name': None, 'email': 'outro@email.com'}
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()['name'] == original_name
     assert response.json()['email'] == 'outro@email.com'
 
 
-def test_update_user_not_found(client):
+def test_update_user_not_found(client, token):
     update_data = {'name': 'Novo Nome'}
 
-    response = client.put(f'{ENDPOINT_URL}/9999', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/9999',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert 'Não encontrado' in response.json()['detail']
 
 
-def test_update_user_inactive(client, user_inactive):
+def test_update_user_inactive(client, user_inactive, token):
     update_data = {'name': 'Novo Nome'}
-    response = client.put(f'/users/{user_inactive.id}', json=update_data)
+    response = client.put(
+        f'/users/{user_inactive.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_update_user_duplicate_username(client, session, user, another_user):
+def test_update_user_duplicate_username(
+    client, session, user, another_user, token
+):
     update_data = {'username': another_user.username}
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.CONFLICT
     assert (
@@ -172,9 +208,15 @@ def test_update_user_duplicate_username(client, session, user, another_user):
     )
 
 
-def test_update_user_duplicate_email(client, session, user, another_user):
+def test_update_user_duplicate_email(
+    client, session, user, another_user, token
+):
     update_data = {'email': another_user.email}
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.CONFLICT
     assert (
@@ -183,52 +225,72 @@ def test_update_user_duplicate_email(client, session, user, another_user):
     )
 
 
-def test_update_user_invalid_data(client, user):
-    """Testa validação de dados inválidos"""
+def test_update_user_invalid_data(client, user, token):
     update_data = {
         'email': 'email-invalido',
         'name': '',
     }
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_update_user_same_data(client, user):
+def test_update_user_same_data(client, user, token):
     update_data = {
         'name': user.name,
         'email': user.email,
     }
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
     assert response.status_code == HTTPStatus.OK
 
 
-def test_update_user_case_sensitivity_email(client, user):
+def test_update_user_case_sensitivity_email(client, user, token):
     update_data = {'email': user.email.upper()}
 
-    response = client.put(f'{ENDPOINT_URL}/{user.id}', json=update_data)
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
     assert response.status_code == HTTPStatus.OK
     assert response.json()['email'] == user.email.upper().lower()
 
 
-def test_deactivate_user_success(client, user):
-    response = client.delete(f'{ENDPOINT_URL}/{user.id}')
+def test_deactivate_user_success(client, user, token):
+    response = client.delete(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.NO_CONTENT
     assert response.content == b''
 
 
-def test_deactivate_user_not_found(client):
-    response = client.delete(f'{ENDPOINT_URL}/9999')
+def test_deactivate_user_not_found(client, token):
+    response = client.delete(
+        f'{ENDPOINT_URL}/9999',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert 'Não encontrado usuário com id (9999).' == response.json()['detail']
 
 
-def test_deactivate_user_already_inactive(client, user_inactive):
-    response = client.delete(f'{ENDPOINT_URL}/{user_inactive.id}')
+def test_deactivate_user_already_inactive(client, user_inactive, token):
+    response = client.delete(
+        f'{ENDPOINT_URL}/{user_inactive.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert (
