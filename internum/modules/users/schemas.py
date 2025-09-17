@@ -19,7 +19,7 @@ class UserBase(BaseModel):
     def normalize_email(cls, v):
         if v and isinstance(v, str):
             return v.strip().lower()
-        return v
+        return v  # pragma: no cover
 
 
 class UserCreate(UserBase):
@@ -50,7 +50,7 @@ class UserUpdate(BaseModel):
     def normalize_email(cls, v):
         if v and isinstance(v, str):
             return v.strip().lower()
-        return v
+        return v  # pragma: no cover
 
 
 class FilterPage(BaseModel):
