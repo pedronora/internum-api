@@ -7,6 +7,8 @@ from internum.core.settings import Settings
 
 settings = Settings()
 
+ENDPOINT_URL = '/api/v1'
+
 
 def test_jwt():
     data = {'teste': 'teste'}
@@ -22,7 +24,8 @@ def test_jwt():
 
 def test_jwt_invalid_token(client):
     response = client.delete(
-        '/api/v1/users/1', headers={'Authorization': 'Bearer token-invalido'}
+        f'{ENDPOINT_URL}/users/1',
+        headers={'Authorization': 'Bearer token-invalido'},
     )
 
     assert response.status_code == HTTPStatus.UNAUTHORIZED
