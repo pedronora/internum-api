@@ -15,7 +15,9 @@ from internum.modules.users.models import User
 
 settings = Settings()
 pwd_context = PasswordHash.recommended()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='api/v1/auth/token')
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl='api/v1/auth/token', refreshUrl='api/v1/auth/refresh'
+)
 
 
 def create_access_token(data: dict):

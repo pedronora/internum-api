@@ -29,6 +29,7 @@ commitizen = "^4.8.3"
 pytest-asyncio = "^1.1.0"
 factory-boy = "^3.3.3"
 testcontainers = "^4.13.0"
+freezegun = "^1.5.5"
 
 [tool.taskipy.tasks]
 lint = 'ruff check'
@@ -38,7 +39,9 @@ run = 'bash internum/infra/orchestrate.sh'
 servicesUp = 'docker compose -f internum/infra/compose.yaml up -d'
 servicesStop = 'docker compose -f internum/infra/compose.yaml stop'
 servicesDown = 'docker compose -f internum/infra/compose.yaml down'
+pre_test = 'task lint'
 test = 'pytest -s -x --cov=internum -vv'
+post_test = 'coverage html'
 commit = 'cz commit'
 
 [tool.ruff]

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
+from internum.core.permissions import CurrentUser
 from internum.core.security import (
     create_access_token,
     verify_password,
@@ -44,3 +45,10 @@ async def login_for_access_token(
     access_token = create_access_token(data={'sub': user.username})
 
     return {'access_token': access_token, 'token_type': 'bearer'}
+
+
+@router.post('/refresh_token', response_model=Token)
+async def refresh_access_token(user: CurrentUser):
+    new_access_token = create_access_token(data={'sub': user.username})
+
+    return {'access_token': new_access_token, 'token_type': 'bearer'}

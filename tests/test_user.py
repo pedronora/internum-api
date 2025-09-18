@@ -6,16 +6,16 @@ from internum.modules.users.schemas import UserRead
 ENDPOINT_URL = '/api/v1/users'
 
 
-def test_create_user(client, mock_db_time, token):
+def test_create_user(client, mock_db_time, token_admin):
     with mock_db_time(model=User) as time:
         response = client.post(
             ENDPOINT_URL,
-            headers={'Authorization': f'Bearer {token}'},
+            headers={'Authorization': f'Bearer {token_admin}'},
             json={
                 'name': 'Pedro Nora',
                 'username': 'User_1',
                 'password': 'senha-teste',
-                'email': 'test@test.com',
+                'email': 'TEST@test.com',
                 'role': 'user',
                 'setor': 'oficial',
                 'subsetor': 'titular',
@@ -33,6 +33,81 @@ def test_create_user(client, mock_db_time, token):
     assert data['created_at'] == time.isoformat()
 
 
+def test_create_user_without_permission(client, mock_db_time, token):
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': 'senha-teste',
+            'email': 'test@test.com',
+            'role': 'user',
+            'setor': 'oficial',
+            'subsetor': 'titular',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
+
+
+def test_create_user_with_existent_username(client, user, token_admin):
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': user.name,
+            'username': user.username,
+            'password': user.password,
+            'email': 'other@mail.com',
+            'setor': user.setor,
+            'subsetor': user.subsetor,
+            'role': user.role,
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json()['detail'] == 'Usuário já existente.'
+
+
+def test_create_user_with_existent_email(client, user, token_admin):
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': user.name,
+            'username': 'new_username',
+            'password': user.password,
+            'email': user.email,
+            'setor': user.setor,
+            'subsetor': user.subsetor,
+            'role': user.role,
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json()['detail'] == 'Email já existente.'
+
+
+def test_get_users(client, token_admin):
+    response = client.get(
+        ENDPOINT_URL, headers={'Authorization': f'Bearer {token_admin}'}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert len(response.json()['users']) > 0
+
+
+def test_get_users_without_permissions(client, token):
+    response = client.get(
+        ENDPOINT_URL, headers={'Authorization': f'Bearer {token}'}
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
+
+
 def test_get_user(client, user, token):
     expected_data = UserRead.model_validate(user).model_dump(mode='json')
 
@@ -46,10 +121,10 @@ def test_get_user(client, user, token):
     assert response.json() == expected_data
 
 
-def test_get_user_by_id_not_found(client, token):
+def test_get_user_by_id_not_found(client, token_admin):
     response = client.get(
         f'{ENDPOINT_URL}/999999',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -93,6 +168,21 @@ def test_update_user_success(client, user, token):
     assert response.json()['username'] == user.username
 
 
+def test_update_email_upper_char(client, user, token):
+    update_data = {
+        'email': 'NOVO.email@test.com',
+    }
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['email'] == 'novo.email@test.com'
+
+
 def test_update_user_partial_data(client, user, token):
     update_data = {'name': 'Nome Parcial'}
 
@@ -108,7 +198,7 @@ def test_update_user_partial_data(client, user, token):
     assert response.json()['username'] == user.username
 
 
-def test_update_user_all_fields(client, user, token):
+def test_update_user_all_fields(client, user, token_admin):
     update_data = {
         'name': 'Nome Completo',
         'username': 'novousername',
@@ -121,7 +211,7 @@ def test_update_user_all_fields(client, user, token):
 
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
         json=update_data,
     )
 
@@ -134,6 +224,21 @@ def test_update_user_all_fields(client, user, token):
     assert data['subsetor'] == 'Desenvolvimento'
     assert data['role'] == 'admin'
     assert not data['active']
+
+
+def test_update_role_without_permissions(client, user, token):
+    update_data = {'role': 'coord'}
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == (
+        'Acesso negado: usuário sem permissão para definir atribuição (role)'
+    )
 
 
 def test_update_user_empty_payload(client, user, token):
@@ -167,12 +272,12 @@ def test_update_user_with_none_values(client, user, token):
     assert response.json()['email'] == 'outro@email.com'
 
 
-def test_update_user_not_found(client, token):
+def test_update_user_not_found(client, token_admin):
     update_data = {'name': 'Novo Nome'}
 
     response = client.put(
         f'{ENDPOINT_URL}/9999',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
         json=update_data,
     )
 
@@ -192,9 +297,9 @@ def test_update_user_inactive(client, user_inactive, token):
 
 
 def test_update_user_duplicate_username(
-    client, session, user, another_user, token
+    client, session, user, other_user, token
 ):
-    update_data = {'username': another_user.username}
+    update_data = {'username': other_user.username}
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
         headers={'Authorization': f'Bearer {token}'},
@@ -208,10 +313,8 @@ def test_update_user_duplicate_username(
     )
 
 
-def test_update_user_duplicate_email(
-    client, session, user, another_user, token
-):
-    update_data = {'email': another_user.email}
+def test_update_user_duplicate_email(client, session, user, other_user, token):
+    update_data = {'email': other_user.email}
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
         headers={'Authorization': f'Bearer {token}'},
@@ -266,30 +369,40 @@ def test_update_user_case_sensitivity_email(client, user, token):
     assert response.json()['email'] == user.email.upper().lower()
 
 
-def test_deactivate_user_success(client, user, token):
+def test_deactivate_user_success(client, user, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
     )
 
     assert response.status_code == HTTPStatus.NO_CONTENT
     assert response.content == b''
 
 
-def test_deactivate_user_not_found(client, token):
+def test_deactivate_user_without_permission(client, user, token):
+    response = client.delete(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
+
+
+def test_deactivate_user_not_found(client, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/9999',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert 'Não encontrado usuário com id (9999).' == response.json()['detail']
 
 
-def test_deactivate_user_already_inactive(client, user_inactive, token):
+def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/{user_inactive.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_admin}'},
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
