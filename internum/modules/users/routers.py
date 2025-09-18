@@ -195,12 +195,6 @@ async def change_password(
             detail=f'Não encontrado usuário com id ({user_id}).',
         )
 
-    if not db_user.active:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=f'Usuário com id ({user_id}) está inativo.',
-        )
-
     if verify_password(new_pwd.password, db_user.password):
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
