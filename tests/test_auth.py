@@ -58,3 +58,23 @@ def test_token_wrong_password(client, user):
     )
     assert response.status_code == HTTPStatus.UNAUTHORIZED
     assert response.json() == {'detail': 'Email ou senha incorretos'}
+
+
+def test_token_expired_dont_refresh(client, user):
+    with freeze_time('2025-09-18 12:00:00'):
+        response = client.post(
+            f'{ENDPOINT_URL}/token',
+            data={'username': user.username, 'password': user.clean_password},
+        )
+        assert response.status_code == HTTPStatus.OK
+        token = response.json()['access_token']
+
+    with freeze_time('2025-09-18 12:31:00'):
+        response = client.post(
+            f'{ENDPOINT_URL}/refresh_token',
+            headers={'Authorization': f'Bearer {token}'},
+        )
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        assert response.json() == {
+            'detail': 'Não foi possível validar as credenciais'
+        }
