@@ -43,6 +43,7 @@ def require_roles(*allowed_roles: str) -> Callable:
     return dependency
 
 
+VerifySelfAdmin = Annotated[UserRead, Depends(require_self_or_roles('admin'))]
 VerifySelfAdminCoord = Annotated[
     UserRead, Depends(require_self_or_roles('admin', 'coord'))
 ]

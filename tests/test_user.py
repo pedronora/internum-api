@@ -14,7 +14,7 @@ def test_create_user(client, mock_db_time, token_admin):
             json={
                 'name': 'Pedro Nora',
                 'username': 'User_1',
-                'password': 'senha-teste',
+                'password': '@1Senha-teste',
                 'email': 'TEST@test.com',
                 'role': 'user',
                 'setor': 'oficial',
@@ -59,7 +59,7 @@ def test_create_user_with_existent_username(client, user, token_admin):
         json={
             'name': user.name,
             'username': user.username,
-            'password': user.password,
+            'password': user.clean_password,
             'email': 'other@mail.com',
             'setor': user.setor,
             'subsetor': user.subsetor,
@@ -78,7 +78,7 @@ def test_create_user_with_existent_email(client, user, token_admin):
         json={
             'name': user.name,
             'username': 'new_username',
-            'password': user.password,
+            'password': user.clean_password,
             'email': user.email,
             'setor': user.setor,
             'subsetor': user.subsetor,

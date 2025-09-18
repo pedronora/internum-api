@@ -22,7 +22,14 @@ class UserFactory(factory.Factory):
 
     name = factory.Sequence(lambda n: f'User_{n}')
     username = factory.LazyAttribute(lambda obj: obj.name.lower())
-    password = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
+    password = factory.Faker(
+        'password',
+        length=15,
+        special_chars=True,
+        digits=True,
+        upper_case=True,
+        lower_case=True,
+    )
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
     role = Role.USER
     setor = Setor.REGISTRO
