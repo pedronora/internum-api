@@ -9,12 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from internum.core.database import get_session
 from internum.core.permissions import (
     VerifyAdminCoord,
+    VerifySelfAdmin,
     VerifySelfAdminCoord,
 )
-from internum.core.security import get_password_hash
+from internum.core.security import get_password_hash, verify_password
 from internum.modules.users.models import User
 from internum.modules.users.schemas import (
     FilterPage,
+    Message,
+    UserChangePassword,
     UserCreate,
     UserList,
     UserRead,
@@ -171,3 +174,34 @@ async def deactivate_user(
 
     db_user.active = False
     await session.commit()
+
+
+@router.post(
+    '/{user_id}/change-password',
+    response_model=Message,
+    status_code=HTTPStatus.OK,
+)
+async def change_password(
+    user_id: int,
+    new_pwd: UserChangePassword,
+    session: Session,
+    current_user: VerifySelfAdmin,
+):
+    db_user = await session.scalar(select(User).where(User.id == user_id))
+
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user_id}).',
+        )
+
+    if verify_password(new_pwd.password, db_user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Senha nova igual à atual',
+        )
+
+    db_user.password = get_password_hash(new_pwd.password)
+    await session.commit()
+
+    return {'message': 'Senha alterado com sucesso'}

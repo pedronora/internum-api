@@ -30,7 +30,7 @@ async def login_for_access_token(
         select(User).where(User.username == form_data.username)
     )
 
-    if not user:
+    if not user or not user.active:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail='Email ou senha incorretos',

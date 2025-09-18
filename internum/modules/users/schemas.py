@@ -1,9 +1,35 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    validator,
+)
 
 from internum.modules.users.enums import Role, Setor
+
+MIN_LENGTH_PWD = 8
+MAX_LENGTH_PWD = 64
+
+
+def validate_password_complexity(pwd: str) -> str:
+    if len(pwd) < MIN_LENGTH_PWD or len(pwd) > MAX_LENGTH_PWD:
+        raise ValueError('A senha deve ter entre 8 e 64 caracteres.')
+    if not any(char.isdigit() for char in pwd):
+        raise ValueError('A senha deve conter pelo menos um dígito.')
+    if not any(char.islower() for char in pwd):
+        raise ValueError('A senha deve conter pelo menos uma letra minúscula.')
+    if not any(char.isupper() for char in pwd):
+        raise ValueError('A senha deve conter pelo menos uma letra maiúscula.')
+    if not any(not char.isalnum() for char in pwd):
+        raise ValueError(
+            'A senha deve conter pelo menos um caractere especial.'
+        )
+    return pwd
 
 
 class UserBase(BaseModel):
@@ -24,6 +50,16 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    _validate_password = validator('password', allow_reuse=True)(
+        validate_password_complexity
+    )
+
+
+class UserChangePassword(BaseModel):
+    password: str
+    _validate_password = validator('password', allow_reuse=True)(
+        validate_password_complexity
+    )
 
 
 class UserRead(UserBase):
@@ -56,3 +92,7 @@ class UserUpdate(BaseModel):
 class FilterPage(BaseModel):
     offset: int = Field(ge=0, default=0)
     limit: int = Field(ge=0, default=10)
+
+
+class Message(BaseModel):
+    message: str

@@ -22,7 +22,14 @@ class UserFactory(factory.Factory):
 
     name = factory.Sequence(lambda n: f'User_{n}')
     username = factory.LazyAttribute(lambda obj: obj.name.lower())
-    password = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
+    password = factory.Faker(
+        'password',
+        length=15,
+        special_chars=True,
+        digits=True,
+        upper_case=True,
+        lower_case=True,
+    )
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
     role = Role.USER
     setor = Setor.REGISTRO
@@ -65,6 +72,18 @@ def token(client, user):
     response = client.post(
         'api/v1/auth/token',
         data={'username': user.username, 'password': user.clean_password},
+    )
+    return response.json()['access_token']
+
+
+@pytest.fixture
+def token_inactive(client, user_inactive):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_inactive.username,
+            'password': user_inactive.clean_password,
+        },
     )
     return response.json()['access_token']
 
@@ -121,13 +140,16 @@ async def user(session):
 @pytest_asyncio.fixture
 async def user_inactive(session):
     user = UserFactory()
+    plain_password = user.password
 
+    user.password = get_password_hash(plain_password)
     user.active = False
 
     session.add(user)
     await session.commit()
     await session.refresh(user)
 
+    user.clean_password = plain_password
     return user
 
 
