@@ -410,3 +410,47 @@ def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
         f'Usuário com id ({user_inactive.id}) já está inativo.'
         == response.json()['detail']
     )
+
+
+def test_user_change_pwd(client, user, token):
+    response = client.post(
+        f'{ENDPOINT_URL}/{user.id}/change-password',
+        headers={'Authorization': f'Bearer {token}'},
+        json={'password': '@Aa12345678'},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['message'] == 'Senha alterado com sucesso'
+
+
+def test_user_change_with_same_pwd(client, user, token):
+    response = client.post(
+        f'{ENDPOINT_URL}/{user.id}/change-password',
+        headers={'Authorization': f'Bearer {token}'},
+        json={'password': user.clean_password},
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert response.json()['detail'] == 'Senha nova igual à atual'
+
+
+def test_change_pwd_user_not_found(client, token_admin):
+    response = client.post(
+        f'{ENDPOINT_URL}/9999/change-password',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={'password': '@Aa12345678'},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()['detail'] == 'Não encontrado usuário com id (9999).'
+
+
+def test_change_pwd_without_permission(client, user, other_user, token):
+    response = client.post(
+        f'{ENDPOINT_URL}/{other_user.id}/change-password',
+        headers={'Authorization': f'Bearer {token}'},
+        json={'password': user.clean_password},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'

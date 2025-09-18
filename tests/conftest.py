@@ -77,6 +77,18 @@ def token(client, user):
 
 
 @pytest.fixture
+def token_inactive(client, user_inactive):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_inactive.username,
+            'password': user_inactive.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
+@pytest.fixture
 def token_admin(client, user_admin):
     response = client.post(
         'api/v1/auth/token',
@@ -128,13 +140,16 @@ async def user(session):
 @pytest_asyncio.fixture
 async def user_inactive(session):
     user = UserFactory()
+    plain_password = user.password
 
+    user.password = get_password_hash(plain_password)
     user.active = False
 
     session.add(user)
     await session.commit()
     await session.refresh(user)
 
+    user.clean_password = plain_password
     return user
 
 
