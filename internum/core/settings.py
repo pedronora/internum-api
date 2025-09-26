@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_PASSWORD: str
     DATABASE_URL: str = ''
+    REFRESH_COOKIE_NAME: str
+    REFRESH_COOKIE_PATH: str
+    REFRESH_TOKEN_EXPIRE_DAYS: int
+    REFRESH_COOKIE_MAX_AGE: int
+    SECURE_COOKIE: bool
+    REFRESH_COOKIE_SAMESITE: str
 
     def __init__(self, **values):
         super().__init__(**values)

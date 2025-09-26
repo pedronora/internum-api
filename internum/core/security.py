@@ -27,7 +27,9 @@ def _now_utc() -> datetime:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = _now_utc + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = _now_utc() + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
     to_encode.update({'exp': expire})
     encoded_jwt = encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -38,9 +40,8 @@ def create_access_token(data: dict):
 def create_refresh_token(data: dict):
     to_encode = data.copy()
     jti = uuid.uuid4().hex
-    expire = _now_utc() + timedelta(
-        days=getattr(settings, 'REFRESH_TOKEN_EXPIRE_DAYS', 7)
-    )
+    expire = _now_utc() + timedelta(settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
     to_encode.update({'exp': expire, 'jti': jti, 'type': 'refresh'})
     encoded_jwt = encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -54,6 +55,22 @@ def get_password_hash(password: str):
 
 def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def decode_token(token: str):
+    try:
+        payload = decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED, detail='Token expirado'
+        )
+    except DecodeError:
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED, detail='Token inválido'
+        )
 
 
 async def get_current_user(
