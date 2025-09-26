@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
@@ -16,16 +17,31 @@ from internum.modules.users.models import User
 settings = Settings()
 pwd_context = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl='api/v1/auth/token', refreshUrl='api/v1/auth/refresh'
+    tokenUrl='api/v1/auth/token', refreshUrl='api/v1/auth/refresh_token'
 )
+
+
+def _now_utc() -> datetime:
+    return datetime.now(tz=ZoneInfo('UTC'))
 
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(tz=ZoneInfo('UTC')) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    expire = _now_utc + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({'exp': expire})
+    encoded_jwt = encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
+
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    jti = uuid.uuid4().hex
+    expire = _now_utc() + timedelta(
+        days=getattr(settings, 'REFRESH_TOKEN_EXPIRE_DAYS', 7)
+    )
+    to_encode.update({'exp': expire, 'jti': jti, 'type': 'refresh'})
     encoded_jwt = encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
@@ -69,7 +85,7 @@ async def get_current_user(
         select(User).where(User.username == subject_username)
     )
 
-    if not user:
+    if not user or not user.active:
         raise credentials_exception
 
     return user
