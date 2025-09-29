@@ -36,3 +36,10 @@ jobs:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REFRESH_COOKIE_NAME: ${{ secrets.REFRESH_COOKIE_NAME }}
+          REFRESH_COOKIE_PATH: ${{ secrets.REFRESH_COOKIE_PATH }}
+          REFRESH_TOKEN_EXPIRE_DAYS: ${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
+          REFRESH_COOKIE_MAX_AGE: ${{ secrets.REFRESH_COOKIE_MAX_AGE }}
+          SECURE_COOKIE: ${{ secrets.SECURE_COOKIE }}
+          REFRESH_COOKIE_SAMESITE: ${{ secrets.REFRESH_COOKIE_SAMESITE }}

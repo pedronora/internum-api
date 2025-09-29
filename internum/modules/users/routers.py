@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
 from internum.core.permissions import (
+    CurrentUser,
     VerifyAdminCoord,
     VerifySelfAdmin,
     VerifySelfAdminCoord,
@@ -78,6 +79,11 @@ async def read_users(
     )
     users = query.all()
     return {'users': users}
+
+
+@router.get('/me', response_model=UserRead)
+async def get_current_user_data(session: Session, current_user: CurrentUser):
+    return current_user
 
 
 @router.get('/{user_id}', response_model=UserRead)
