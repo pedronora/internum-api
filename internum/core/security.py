@@ -102,7 +102,13 @@ async def get_current_user(
         select(User).where(User.username == subject_username)
     )
 
-    if not user or not user.active:
+    if not user:
         raise credentials_exception
+
+    if not user.active:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user.id}).',
+        )
 
     return user

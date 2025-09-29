@@ -108,12 +108,11 @@ async def refresh_access_token(
 
 @router.post('/logout', status_code=HTTPStatus.NO_CONTENT)
 async def logout(response: Response):
-    """
-    Logout simples: limpa o cookie do refresh token.
-    """
-
     response.delete_cookie(
         key=settings.REFRESH_COOKIE_NAME,
         path=settings.REFRESH_COOKIE_PATH,
+        domain=None,
+        secure=settings.SECURE_COOKIE,
+        httponly=True,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
     )
-    return Response(status_code=HTTPStatus.NO_CONTENT)

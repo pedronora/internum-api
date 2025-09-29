@@ -2,6 +2,10 @@ from http import HTTPStatus
 
 from freezegun import freeze_time
 
+from internum.core.settings import Settings
+
+settings = Settings()
+
 ENDPOINT_URL = '/api/v1/auth'
 
 
@@ -60,7 +64,7 @@ def test_token_wrong_password(client, user):
     assert response.json() == {'detail': 'Email ou senha incorretos'}
 
 
-def test_token_expired_dont_refresh(client, user):
+def test_token_expired_refresh_token(client, user):
     with freeze_time('2025-09-18 12:00:00'):
         response = client.post(
             f'{ENDPOINT_URL}/token',
@@ -72,9 +76,39 @@ def test_token_expired_dont_refresh(client, user):
     with freeze_time('2025-09-18 12:31:00'):
         response = client.post(
             f'{ENDPOINT_URL}/refresh_token',
-            headers={'Authorization': f'Bearer {token}'},
+        )
+        assert response.status_code == HTTPStatus.OK
+        assert 'access_token' in response.json().keys()
+        assert response.json()['access_token'] != token
+
+
+def test_token_expired_without_refresh_token(client, user):
+    with freeze_time('2025-09-18 12:00:00'):
+        response = client.post(
+            f'{ENDPOINT_URL}/token',
+            data={'username': user.username, 'password': user.clean_password},
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        client.cookies.clear()
+
+    with freeze_time('2025-09-18 12:31:00'):
+        response = client.post(
+            f'{ENDPOINT_URL}/refresh_token',
         )
         assert response.status_code == HTTPStatus.UNAUTHORIZED
-        assert response.json() == {
-            'detail': 'Não foi possível validar as credenciais'
-        }
+
+
+def test_successful_logout(client, user):
+    login_response = client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    assert login_response.status_code == HTTPStatus.OK
+
+    assert settings.REFRESH_COOKIE_NAME in client.cookies
+
+    response = client.post(f'{ENDPOINT_URL}/logout')
+
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    assert settings.REFRESH_COOKIE_NAME not in client.cookies
