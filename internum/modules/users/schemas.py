@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+from fastapi import Query
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -69,7 +70,18 @@ class UserRead(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserList(BaseModel):
+class PageMeta(BaseModel):
+    total: int
+    page: int
+    size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+    offset: int
+
+
+class PaginatedUserList(BaseModel):
+    meta: PageMeta
     users: list[UserRead]
 
 
@@ -89,9 +101,17 @@ class UserUpdate(BaseModel):
         return v  # pragma: no cover
 
 
-class FilterPage(BaseModel):
-    offset: int = Field(ge=0, default=0)
-    limit: int = Field(ge=0, default=10)
+class UserQueryParams(BaseModel):
+    limit: int = Query(
+        default=10, ge=1, description='Número de itens por página'
+    )
+    offset: int = Query(default=0, ge=0, description='Número de itens a pular')
+
+    search: Optional[str] = Query(
+        default=None,
+        min_length=1,
+        description='Termo de busca para os campos: name, username, email',
+    )
 
 
 class Message(BaseModel):
