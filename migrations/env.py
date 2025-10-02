@@ -5,8 +5,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from internum.core.models.registry import table_registry
 from internum.core.settings import Settings
-from internum.modules.users.models import table_registry
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
