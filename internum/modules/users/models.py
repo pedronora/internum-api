@@ -2,11 +2,10 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, func
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy.orm import Mapped, mapped_column, registry
+from sqlalchemy.orm import Mapped, mapped_column
 
+from internum.core.models.registry import table_registry
 from internum.modules.users.enums import Role, Setor
-
-table_registry = registry()
 
 
 @table_registry.mapped_as_dataclass
