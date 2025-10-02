@@ -1,8 +1,9 @@
+import math
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,11 +17,12 @@ from internum.core.permissions import (
 from internum.core.security import get_password_hash, verify_password
 from internum.modules.users.models import User
 from internum.modules.users.schemas import (
-    FilterPage,
     Message,
+    PageMeta,
+    PaginatedUserList,
     UserChangePassword,
     UserCreate,
-    UserList,
+    UserQueryParams,
     UserRead,
     UserUpdate,
 )
@@ -65,20 +67,61 @@ async def create_user(
     return db_user
 
 
-@router.get('/', response_model=UserList)
+@router.get('/', response_model=PaginatedUserList)
 async def read_users(
     session: Session,
-    filter_users: Annotated[FilterPage, Query()],
+    params: Annotated[UserQueryParams, Depends()],
     current_user: VerifyAdminCoord,
 ):
+    limit = max(1, params.limit)
+    offset = max(0, params.offset)
+    search = params.search
+
+    filters = [User.active]
+
+    if search:
+        search_pattern = f'%{search}%'
+
+        search_filters = or_(
+            User.name.ilike(search_pattern),
+            User.username.ilike(search_pattern),
+            User.email.ilike(search_pattern),
+        )
+
+        filters.append(search_filters)
+
+    total: int = (
+        await session.scalar(
+            select(func.count()).select_from(User).where(*filters)
+        )
+        | 0
+    )
+
     query = await session.scalars(
         select(User)
-        .where(User.active)
-        .offset(filter_users.offset)
-        .limit(filter_users.limit)
+        .where(*filters)
+        .order_by(User.name)
+        .offset(offset)
+        .limit(limit)
     )
     users = query.all()
-    return {'users': users}
+
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    page = (offset // limit) + 1 if limit > 0 else 1
+    has_next = (offset + limit) < total
+    has_prev = offset > 0
+
+    meta = PageMeta(
+        total=total,
+        page=page,
+        size=limit,
+        total_pages=total_pages,
+        has_next=has_next,
+        has_prev=has_prev,
+        offset=offset,
+    )
+
+    return {'meta': meta, 'users': users}
 
 
 @router.get('/me', response_model=UserRead)
