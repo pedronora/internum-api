@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import Boolean, ForeignKey, UniqueConstraint, func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from internum.core.models.registry import table_registry
@@ -22,16 +23,24 @@ class Notice:
         ForeignKey('users.id'), nullable=False
     )
 
-    user: Mapped['User'] = relationship(back_populates='notices')
+    user: Mapped['User'] = relationship(back_populates='notices', init=False)
+
+    reads: Mapped[list['NoticeRead']] = relationship(
+        back_populates='notice',
+        cascade='all, delete-orphan',
+        lazy='selectin',
+        init=False,
+    )
 
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        init=False, onupdate=func.now(), nullable=True
-    )
+
+    @hybrid_property
+    def reads_count(self) -> int:
+        return len(self.reads)
 
 
 @table_registry.mapped_as_dataclass
@@ -54,5 +63,5 @@ class NoticeRead:
         init=False, server_default=func.now()
     )
 
-    user: Mapped['User'] = relationship(back_populates='reads')
-    notice: Mapped['Notice'] = relationship(back_populates='reads')
+    user: Mapped['User'] = relationship(back_populates='reads', init=False)
+    notice: Mapped['Notice'] = relationship(back_populates='reads', init=False)
