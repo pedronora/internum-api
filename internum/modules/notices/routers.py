@@ -59,7 +59,7 @@ async def list_unread_notices(
         await session.scalar(
             select(func.count()).select_from(Notice).where(*filters)
         )
-        | 0
+        or 0
     )
 
     query = await session.scalars(
@@ -119,7 +119,7 @@ async def list_read_notices(
         await session.scalar(
             select(func.count()).select_from(Notice).where(*filters)
         )
-        | 0
+        or 0
     )
 
     query = await session.scalars(
@@ -195,8 +195,12 @@ async def mark_as_read(
 
     new_read = NoticeRead(user_id=current_user.id, notice_id=notice_id)
 
-    session.add(new_read)
-    await session.commit()
+    try:
+        session.add(new_read)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
 
     return {
         'message': f'Notice with id ({notice_id}) '
@@ -213,9 +217,15 @@ async def create_notice(
     db_notice = Notice(
         title=notice.title, content=notice.content, user_id=author.id
     )
-    session.add(db_notice)
-    await session.commit()
-    await session.refresh(db_notice)
+
+    try:
+        session.add(db_notice)
+        await session.commit()
+        await session.refresh(db_notice)
+    except Exception:
+        await session.rollback()
+        raise
+
     return db_notice
 
 
@@ -245,14 +255,14 @@ async def list_notices(
         await session.scalar(
             select(func.count()).select_from(Notice).where(*filters)
         )
-        | 0
+        or 0
     )
 
     query = await session.scalars(
         select(Notice)
         .options(selectinload(Notice.user))
         .where(*filters)
-        .order_by(Notice.created_at)
+        .order_by(Notice.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
@@ -323,6 +333,12 @@ async def deactivate_notice(
         select(Notice).where(Notice.id == notice_id)
     )
 
+    if not db_notice:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Notice with id ({notice_id}) not found.',
+        )
+
     if not db_notice.active:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
@@ -330,4 +346,9 @@ async def deactivate_notice(
         )
 
     db_notice.active = False
-    await session.commit()
+
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
