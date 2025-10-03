@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, func
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from internum.core.models.registry import table_registry
 from internum.modules.users.enums import Role, Setor
+
+# ruff: noqa: F821
 
 
 @table_registry.mapped_as_dataclass
@@ -21,9 +25,13 @@ class User:
         SqlEnum(Setor, name='setor_enum'), nullable=False
     )
     subsetor: Mapped[str] = mapped_column(nullable=False)
+    notices: Mapped[list['Notice']] = relationship(
+        back_populates='user', cascade='all, delete-orphan'
+    )
     role: Mapped[Role] = mapped_column(
         SqlEnum(Role, name='role_enum'), default=Role.USER, nullable=False
     )
+
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
