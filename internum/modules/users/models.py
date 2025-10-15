@@ -34,6 +34,18 @@ class User:
         lazy='selectin',
         init=False,
     )
+    legal_briefs: Mapped[list['LegalBrief']] = relationship(
+        back_populates='created_by',
+        cascade='all, delete-orphan',
+        init=False,
+        lazy='selectin',
+        foreign_keys='LegalBrief.created_by_id',
+    )
+    revisions: Mapped[list['LegalBriefRevision']] = relationship(
+        back_populates='updated_by',
+        init=False,
+        lazy='selectin',
+    )
     role: Mapped[Role] = mapped_column(
         SqlEnum(Role, name='role_enum'), default=Role.USER, nullable=False
     )
