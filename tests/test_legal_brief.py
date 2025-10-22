@@ -1,4 +1,3 @@
-from datetime import datetime
 from http import HTTPStatus
 
 import factory.fuzzy
@@ -243,7 +242,6 @@ async def test_update_canceled_brief_rejected(
         created_by_id=user_admin.id,
         canceled=True,
         canceled_by_id=user_admin.id,
-        canceled_at=datetime.now(),
     )
     session.add(brief)
     await session.commit()
@@ -284,7 +282,6 @@ async def test_cancel_legal_brief_success(
     data = response.json()
     assert data['canceled'] is True
     assert data['canceled_by']['id'] == user_admin.id
-    assert data['canceled_at'] is not None
 
 
 def test_cancel_legal_brief_not_found(client, token_admin):

@@ -235,7 +235,6 @@ async def cancel_legal_brief(
 
     db_legal_brief.canceled = True
     db_legal_brief.canceled_by_id = current_user.id
-    db_legal_brief.canceled_at = datetime.now()
 
     await session.commit()
     await session.refresh(db_legal_brief)
