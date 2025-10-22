@@ -50,3 +50,4 @@ VerifySelfAdminCoord = Annotated[
 VerifyAdminCoord = Annotated[
     UserRead, Depends(require_roles('admin', 'coord'))
 ]
+VerifyAdmin = Annotated[UserRead, Depends(require_roles('admin'))]
