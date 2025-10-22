@@ -18,7 +18,6 @@ class LegalBrief:
     title: Mapped[str]
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # --- Relações com User ---
     created_by_id: Mapped[int] = mapped_column(
         ForeignKey('users.id'), nullable=False
     )

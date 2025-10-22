@@ -1,8 +1,11 @@
 {
+    "editor.fontFamily": "'Firacode Nerd Font Mono', 'monospace', monospace",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true
     },
+    "editor.formatOnSave": true,
+    "files.autoSave": "onFocusChange",
     "editor.codeActionsOnSave": {
         "source.organizeImports": "explicit"
     },
