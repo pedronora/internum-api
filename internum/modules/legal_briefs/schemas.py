@@ -52,6 +52,7 @@ class LegalBriefRevisionCreate(BaseModel):
 class LegalBriefRevisionSchema(BaseModel):
     id: int
     brief_id: int
+    title: str
     content: str
     updated_by: UserPublic
     created_at: datetime

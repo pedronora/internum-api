@@ -53,6 +53,7 @@ class LegalBrief:
 
     revisions: Mapped[list['LegalBriefRevision']] = relationship(
         back_populates='brief',
+        order_by='desc(LegalBriefRevision.created_at)',
         cascade='all, delete-orphan',
         lazy='selectin',
         init=False,
@@ -72,6 +73,7 @@ class LegalBriefRevision:
         init=False,
     )
 
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     updated_by_id: Mapped[int] = mapped_column(
         ForeignKey('users.id'), nullable=False

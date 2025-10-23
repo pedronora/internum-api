@@ -139,7 +139,7 @@ async def get_legal_brief_by_id(
 
 
 @router.put(
-    '/{brief_id}',
+    '/{legal_brief_id}',
     status_code=HTTPStatus.OK,
     response_model=LegalBriefSchema,
     responses={
@@ -150,13 +150,13 @@ async def get_legal_brief_by_id(
     },
 )
 async def update_legal_brief(
-    brief_id: int,
+    legal_brief_id: int,
     data: LegalBriefUpdate,
     session: Session,
     current_user: VerifyAdmin,
 ):
     current_brief = await session.scalar(
-        select(LegalBrief).where(LegalBrief.id == brief_id)
+        select(LegalBrief).where(LegalBrief.id == legal_brief_id)
     )
 
     if not current_brief:
