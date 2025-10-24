@@ -1,9 +1,14 @@
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from internum.api.main import router as main_router
 
 app = FastAPI(title='Internum API - 1 RI Cascavel')
+
+
+time.tzset()
 
 origins = [
     'http://localhost:5173',

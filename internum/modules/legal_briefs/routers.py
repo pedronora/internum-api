@@ -47,7 +47,9 @@ async def create_legal_brief(
     return db_legal_brief
 
 
-@router.get('/', response_model=PaginatedLegalBriefList)
+@router.get(
+    '/', status_code=HTTPStatus.OK, response_model=PaginatedLegalBriefList
+)
 async def list_legal_briefs(
     session: Session,
     params: Annotated[LegalBriefQueryParams, Depends()],
@@ -76,7 +78,12 @@ async def list_legal_briefs(
 
     query_stmt = (
         select(LegalBrief)
-        .order_by(LegalBrief.created_at.desc())
+        .options(
+            selectinload(LegalBrief.created_by),
+            selectinload(LegalBrief.updated_by),
+            selectinload(LegalBrief.canceled_by),
+            selectinload(LegalBrief.revisions),
+        )
         .offset(offset)
         .limit(limit)
     )
@@ -139,7 +146,7 @@ async def get_legal_brief_by_id(
 
 
 @router.put(
-    '/{brief_id}',
+    '/{legal_brief_id}',
     status_code=HTTPStatus.OK,
     response_model=LegalBriefSchema,
     responses={
@@ -150,13 +157,13 @@ async def get_legal_brief_by_id(
     },
 )
 async def update_legal_brief(
-    brief_id: int,
+    legal_brief_id: int,
     data: LegalBriefUpdate,
     session: Session,
     current_user: VerifyAdmin,
 ):
     current_brief = await session.scalar(
-        select(LegalBrief).where(LegalBrief.id == brief_id)
+        select(LegalBrief).where(LegalBrief.id == legal_brief_id)
     )
 
     if not current_brief:
@@ -174,6 +181,7 @@ async def update_legal_brief(
     try:
         revision = LegalBriefRevision(
             brief_id=current_brief.id,
+            title=current_brief.title,
             content=current_brief.content,
             updated_by_id=current_user.id,
         )
