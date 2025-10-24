@@ -47,7 +47,9 @@ async def create_legal_brief(
     return db_legal_brief
 
 
-@router.get('/', response_model=PaginatedLegalBriefList)
+@router.get(
+    '/', status_code=HTTPStatus.OK, response_model=PaginatedLegalBriefList
+)
 async def list_legal_briefs(
     session: Session,
     params: Annotated[LegalBriefQueryParams, Depends()],
@@ -76,7 +78,12 @@ async def list_legal_briefs(
 
     query_stmt = (
         select(LegalBrief)
-        .order_by(LegalBrief.created_at.desc())
+        .options(
+            selectinload(LegalBrief.created_by),
+            selectinload(LegalBrief.updated_by),
+            selectinload(LegalBrief.canceled_by),
+            selectinload(LegalBrief.revisions),
+        )
         .offset(offset)
         .limit(limit)
     )
@@ -174,6 +181,7 @@ async def update_legal_brief(
     try:
         revision = LegalBriefRevision(
             brief_id=current_brief.id,
+            title=current_brief.title,
             content=current_brief.content,
             updated_by_id=current_user.id,
         )
