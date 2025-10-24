@@ -10,7 +10,7 @@ class UserPublic(BaseModel):
     name: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class LegalBriefCreate(BaseModel):
@@ -21,6 +21,18 @@ class LegalBriefCreate(BaseModel):
 class LegalBriefUpdate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
+
+
+class LegalBriefRevisionSchema(BaseModel):
+    id: int
+    brief_id: int
+    title: str
+    content: str
+    updated_by: UserPublic
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class LegalBriefSchema(BaseModel):
@@ -36,29 +48,11 @@ class LegalBriefSchema(BaseModel):
 
     canceled: bool
     canceled_by: Optional[UserPublic] = None
-    canceled_at: Optional[datetime] = None
 
     revisions: Optional[List['LegalBriefRevisionSchema']] = None
 
     class Config:
-        orm_mode = True
-
-
-class LegalBriefRevisionCreate(BaseModel):
-    brief_id: int
-    content: str = Field(..., min_length=1)
-
-
-class LegalBriefRevisionSchema(BaseModel):
-    id: int
-    brief_id: int
-    title: str
-    content: str
-    updated_by: UserPublic
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class PageMeta(BaseModel):
