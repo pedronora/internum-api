@@ -52,6 +52,8 @@ class BookSchema(AuditSchema):
     available_quantity: int
     loans: list[LoanSchema] = []
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class BookCreate(BaseModel):
     isbn: str
@@ -60,6 +62,20 @@ class BookCreate(BaseModel):
     publisher: str
     edition: int
     year: int
+
+
+class BookUpdateSchema(BaseModel):
+    isbn: Optional[str] = None
+    title: Optional[str] = None
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    edition: Optional[int] = None
+    year: Optional[int] = None
+    quantity: Optional[int] = None
+    available_quantity: Optional[int] = None
+
+    class Config:
+        from_attributes = True
 
 
 class BookQueryParams(BaseModel):
@@ -71,7 +87,7 @@ class BookQueryParams(BaseModel):
     search: Optional[str] = Query(
         default=None,
         min_length=1,
-        description='Termo de busca para os campos: name, username, email',
+        description='Termo de busca para os campos: ISBN, título e autor',
     )
 
 
