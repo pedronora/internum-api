@@ -49,7 +49,8 @@ class Loan(AuditMixin):
     book_id: Mapped[int] = mapped_column(ForeignKey('books.id'))
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     approved_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey('users.id')
+        ForeignKey('users.id'),
+        default=None,
     )
 
     loan_period_days: Mapped[int] = mapped_column(default=14)
@@ -63,32 +64,37 @@ class Loan(AuditMixin):
     returned_at: Mapped[Optional[datetime]] = mapped_column(
         nullable=True, init=False
     )
+
     status: Mapped[LoanStatus] = mapped_column(
-        SqlEnum(LoanStatus), default=LoanStatus.REQUESTED
+        SqlEnum(LoanStatus),
+        default=LoanStatus.REQUESTED,
     )
+
+    user: Mapped['User'] = relationship(
+        'User', foreign_keys=[user_id], lazy='joined', init=False
+    )
+
     approved_by: Mapped[Optional['User']] = relationship(
-        'User',
-        foreign_keys=[approved_by_id],
-        init=False,
-        lazy='joined',
+        'User', foreign_keys=[approved_by_id], lazy='joined', init=False
     )
 
     book: Mapped['Book'] = relationship(back_populates='loans', init=False)
 
-    def approve(self, approver: 'User'):
+    def approve_and_start(self, approver: 'User'):
         if self.status != LoanStatus.REQUESTED:
-            raise ValueError('Only requested loans can be approved.')
-        self.status = LoanStatus.APPROVED
+            raise ValueError('Only requested loans can be started.')
+        self.status = LoanStatus.BORROWED
         self.approved_by = approver
-
-    def start_loan(self):
-        if self.status != LoanStatus.APPROVED:
-            raise ValueError('Loan must be approved before starting.')
         self.borrowed_at = datetime.utcnow()
         self.due_date = datetime.utcnow() + timedelta(
             days=self.loan_period_days
         )
-        self.status = LoanStatus.BORROWED
+
+    def reject(self, approver: 'User'):
+        if self.status != LoanStatus.REQUESTED:
+            raise ValueError('Only requested loans can be rejected.')
+        self.status = LoanStatus.REJECTED
+        self.approved_by = approver
 
     def mark_as_returned(self):
         if self.status not in {LoanStatus.BORROWED, LoanStatus.LATE}:
