@@ -11,9 +11,10 @@ from testcontainers.postgres import PostgresContainer
 
 from internum.app import app
 from internum.core.database import get_session
+from internum.core.models.registry import table_registry
 from internum.core.security import get_password_hash
 from internum.modules.users.enums import Role, Setor
-from internum.modules.users.models import User, table_registry
+from internum.modules.users.models import User
 
 
 class UserFactory(factory.Factory):
@@ -36,9 +37,21 @@ class UserFactory(factory.Factory):
     subsetor = 'Análise'
 
 
+@pytest.fixture
+def client(session):
+    def get_session_override():
+        return session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_session] = get_session_override
+        yield client
+
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture(scope='session')
 def engine():
-    with PostgresContainer('postgres:16', driver='psycopg') as postgres:
+    with PostgresContainer('postgres:17', driver='psycopg') as postgres:
         _engine = create_async_engine(postgres.get_connection_url())
         yield _engine
 
@@ -53,18 +66,6 @@ async def session(engine):
 
     async with engine.begin() as conn:
         await conn.run_sync(table_registry.metadata.drop_all)
-
-
-@pytest.fixture
-def client(session):
-    def get_session_override():
-        return session
-
-    with TestClient(app) as client:
-        app.dependency_overrides[get_session] = get_session_override
-        yield client
-
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
