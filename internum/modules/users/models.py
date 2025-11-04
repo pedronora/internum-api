@@ -28,6 +28,7 @@ class User:
     notices: Mapped[list['Notice']] = relationship(
         back_populates='user', cascade='all, delete-orphan', init=False
     )
+
     reads: Mapped[list['NoticeRead']] = relationship(
         back_populates='user',
         cascade='all, delete-orphan',
