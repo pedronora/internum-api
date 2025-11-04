@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserPublic(BaseModel):
@@ -31,8 +31,7 @@ class LegalBriefRevisionSchema(BaseModel):
     updated_by: UserPublic
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LegalBriefSchema(BaseModel):
@@ -49,10 +48,9 @@ class LegalBriefSchema(BaseModel):
     canceled: bool
     canceled_by: Optional[UserPublic] = None
 
-    revisions: Optional[List['LegalBriefRevisionSchema']] = None
+    revisions: list['LegalBriefRevisionSchema']
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PageMeta(BaseModel):

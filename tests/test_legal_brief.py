@@ -30,7 +30,7 @@ def test_create_legal_brief(client, user_admin, token_admin):
     )
 
     assert response.status_code == HTTPStatus.CREATED
-    assert response.json()['title'] == new_legal_brief['title']
+    assert response.json()['title'] == new_legal_brief['title'].upper()
     assert response.json()['content'] == new_legal_brief['content']
     assert response.json()['created_by']['name'] == user_admin.name
 

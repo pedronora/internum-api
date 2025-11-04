@@ -31,7 +31,7 @@ async def create_legal_brief(
     legal_brief: LegalBriefCreate, session: Session, user: VerifyAdmin
 ):
     db_legal_brief = LegalBrief(
-        title=legal_brief.title,
+        title=legal_brief.title.upper().strip(),
         content=legal_brief.content,
         created_by_id=user.id,
     )
@@ -84,6 +84,7 @@ async def list_legal_briefs(
             selectinload(LegalBrief.canceled_by),
             selectinload(LegalBrief.revisions),
         )
+        .order_by(LegalBrief.id)
         .offset(offset)
         .limit(limit)
     )
