@@ -43,3 +43,7 @@ jobs:
           REFRESH_COOKIE_MAX_AGE: ${{ secrets.REFRESH_COOKIE_MAX_AGE }}
           SECURE_COOKIE: ${{ secrets.SECURE_COOKIE }}
           REFRESH_COOKIE_SAMESITE: ${{ secrets.REFRESH_COOKIE_SAMESITE }}
+          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
