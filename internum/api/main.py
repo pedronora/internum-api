@@ -10,6 +10,7 @@ from internum.api.schemas import ErrorResponse, Status
 from internum.core.database import get_session
 from internum.modules.auth.routers import router as auth_router
 from internum.modules.legal_briefs.routers import router as legal_brief_router
+from internum.modules.library.routers import router as library_router
 from internum.modules.notices.routers import router as notices_router
 from internum.modules.users.routers import router as users_router
 
@@ -18,6 +19,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 router = APIRouter(prefix='/api/v1')
 router.include_router(auth_router)
 router.include_router(legal_brief_router)
+router.include_router(library_router)
 router.include_router(notices_router)
 router.include_router(users_router)
 
