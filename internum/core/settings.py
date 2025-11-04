@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     REFRESH_COOKIE_MAX_AGE: int
     SECURE_COOKIE: bool
     REFRESH_COOKIE_SAMESITE: str
+    ADMIN_NAME: str
+    ADMIN_USERNAME: str
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
 
     def __init__(self, **values):
         super().__init__(**values)
