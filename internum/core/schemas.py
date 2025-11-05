@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -22,11 +22,4 @@ class AuditSchema(BaseModel):
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_encoders={
-            datetime: lambda v: v.astimezone(timezone.utc)
-            .isoformat()
-            .replace('+00:00', 'Z')
-            if v
-            else None
-        },
     )

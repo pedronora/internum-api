@@ -18,6 +18,7 @@ from internum.modules.library.schemas import (
     BookDetailSchema,
     BookQueryParams,
     BookUpdateSchema,
+    LoanBriefSchema,
     LoanQueryParams,
     LoanSchema,
     PageMeta,
@@ -223,7 +224,7 @@ async def soft_delete_book(
 @router.post(
     '/loans/{book_id}/request',
     status_code=HTTPStatus.CREATED,
-    response_model=LoanSchema,
+    response_model=LoanBriefSchema,
 )
 async def request_loan(
     session: Session, book_id: int, current_user: CurrentUser
@@ -248,8 +249,7 @@ async def request_loan(
             detail=str(e),
         )
 
-    session.add(new_loan)
-    session.add(book_db)
+    session.add_all([new_loan, book_db])
     await session.commit()
     await session.refresh(new_loan)
 
@@ -257,9 +257,39 @@ async def request_loan(
 
 
 @router.patch(
+    '/loans/{loan_id}/cancel',
+    status_code=HTTPStatus.OK,
+    response_model=LoanBriefSchema,
+)
+async def cancel_loan(
+    loan_id: int, session: Session, current_user: CurrentUser
+):
+    loan_db = await session.scalar(
+        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+    )
+
+    if not loan_db:
+        raise HTTPException(status_code=404, detail='Loan not found.')
+
+    if loan_db.status != LoanStatus.REQUESTED:
+        raise HTTPException(
+            status_code=400, detail='Only pending requests can be canceled.'
+        )
+
+    loan_db.status = LoanStatus.CANCELED
+    loan_db.updated_by_id = current_user.id
+    loan_db.updated_at = datetime.utcnow()
+
+    await session.commit()
+    await session.refresh(loan_db)
+
+    return loan_db
+
+
+@router.patch(
     '/loans/{loan_id}/approve',
     status_code=HTTPStatus.OK,
-    response_model=LoanSchema,
+    response_model=LoanBriefSchema,
 )
 async def approve_and_start_loan(
     session: Session,
@@ -294,7 +324,7 @@ async def approve_and_start_loan(
 @router.patch(
     '/loans/{loan_id}/return',
     status_code=HTTPStatus.OK,
-    response_model=LoanSchema,
+    response_model=LoanBriefSchema,
 )
 async def return_loan(
     session: Session,
@@ -332,12 +362,10 @@ async def return_loan(
 @router.patch(
     '/loans/{loan_id}/reject',
     status_code=HTTPStatus.OK,
-    response_model=LoanSchema,
+    response_model=LoanBriefSchema,
 )
 async def reject_loan(
-    session: Session,
-    loan_id: int,
-    current_user: VerifyAdminCoord,
+    session: Session, loan_id: int, current_user: VerifyAdminCoord
 ):
     loan_db = await session.scalar(
         select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
