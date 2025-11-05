@@ -7,3 +7,4 @@ class LoanStatus(str, enum.Enum):
     RETURNED = 'returned'
     LATE = 'late'
     REJECTED = 'rejected'
+    CANCELED = 'canceled'
