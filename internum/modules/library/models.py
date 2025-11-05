@@ -101,6 +101,7 @@ class Loan(AuditMixin):
             raise ValueError('Only requested loans can be rejected.')
         self.status = LoanStatus.REJECTED
         self.approved_by = approver
+        self.book.return_book()
 
     def mark_as_returned(self):
         if self.status not in {LoanStatus.BORROWED, LoanStatus.LATE}:

@@ -297,9 +297,7 @@ async def approve_and_start_loan(
     current_user: VerifyAdminCoord,
 ):
     loan_db = await session.scalar(
-        select(Loan)
-        .options(selectinload(Loan.book))
-        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
     if not loan_db:
@@ -332,9 +330,7 @@ async def return_loan(
     current_user: CurrentUser,
 ):
     loan_db = await session.scalar(
-        select(Loan)
-        .options(selectinload(Loan.book))
-        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
     if not loan_db:
@@ -343,14 +339,17 @@ async def return_loan(
             detail=f'Loan with id ({loan_id}) not found.',
         )
 
+    if loan_db.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to return this loan.',
+        )
+
     try:
         loan_db.mark_as_returned()
         loan_db.mark_updated(current_user.id)
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     session.add(loan_db)
     await session.commit()
@@ -380,7 +379,6 @@ async def reject_loan(
     try:
         loan_db.reject(current_user)
         loan_db.mark_updated(current_user.id)
-        loan_db.book.return_book()  # testar
     except ValueError as e:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
