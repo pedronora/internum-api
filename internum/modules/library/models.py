@@ -80,6 +80,12 @@ class Loan(AuditMixin):
 
     book: Mapped['Book'] = relationship(back_populates='loans', init=False)
 
+    def mark_as_cancelled(self, approver: 'User'):
+        if self.status not in {LoanStatus.REQUESTED}:
+            raise ValueError('Loan is not currently pendind approve.')
+        self.status = LoanStatus.CANCELLED
+        self.book.return_book()
+
     def approve_and_start(self, approver: 'User'):
         if self.status != LoanStatus.REQUESTED:
             raise ValueError('Only requested loans can be started.')
@@ -95,6 +101,7 @@ class Loan(AuditMixin):
             raise ValueError('Only requested loans can be rejected.')
         self.status = LoanStatus.REJECTED
         self.approved_by = approver
+        self.book.return_book()
 
     def mark_as_returned(self):
         if self.status not in {LoanStatus.BORROWED, LoanStatus.LATE}:
