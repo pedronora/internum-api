@@ -80,10 +80,10 @@ class Loan(AuditMixin):
 
     book: Mapped['Book'] = relationship(back_populates='loans', init=False)
 
-    def mark_as_cancelled(self, approver: 'User'):
+    def mark_as_canceled(self):
         if self.status not in {LoanStatus.REQUESTED}:
             raise ValueError('Loan is not currently pendind approve.')
-        self.status = LoanStatus.CANCELLED
+        self.status = LoanStatus.CANCELED
         self.book.return_book()
 
     def approve_and_start(self, approver: 'User'):
