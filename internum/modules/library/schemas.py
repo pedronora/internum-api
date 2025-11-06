@@ -42,6 +42,8 @@ class LoanBriefSchema(BaseModel):
     user_id: int
     status: LoanStatus
 
+    model_config = {'from_attributes': True}
+
 
 class LoanQueryParams(BaseModel):
     limit: int = Query(default=10, ge=1, description='Itens por página')
