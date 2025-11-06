@@ -1,4 +1,3 @@
-import math
 from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
@@ -9,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from internum.core.database import get_session
-from internum.core.permissions import CurrentUser, VerifyAdminCoord
+from internum.core.permissions import CurrentUser
 from internum.modules.library.enums import LoanStatus
 from internum.modules.library.models import Book, Loan
 from internum.modules.library.schemas import (
@@ -20,7 +19,6 @@ from internum.modules.library.schemas import (
     BookUpdateSchema,
     LoanBriefSchema,
     LoanQueryParams,
-    LoanSchema,
     PageMeta,
     PaginatedBooksList,
     PaginatedLoansList,
@@ -30,13 +28,30 @@ from internum.modules.users.models import User
 router = APIRouter(prefix='/library', tags=['Library'])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
+ALLOWED_SORT_FIELDS = {
+    'id': Loan.id,
+    'status': Loan.status,
+    'created_at': Loan.created_at,
+    'updated_at': Loan.updated_at,
+    'due_date': Loan.due_date,
+}
+
 
 @router.post(
     '/books', status_code=HTTPStatus.CREATED, response_model=BookBaseSchema
 )
 async def create_book(
-    session: Session, book: BookCreateSchema, current_user: VerifyAdminCoord
+    session: Session, book: BookCreateSchema, current_user: CurrentUser
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to create a loan.',
+        )
+
     stmt = select(Book).where(Book.isbn == book.isbn)
     existing = await session.scalar(stmt)
 
@@ -67,7 +82,9 @@ async def create_book(
 
 
 @router.get(
-    '/books', status_code=HTTPStatus.OK, response_model=PaginatedBooksList
+    '/books',
+    status_code=HTTPStatus.OK,
+    response_model=PaginatedBooksList,
 )
 async def list_books(
     session: Session,
@@ -76,53 +93,43 @@ async def list_books(
 ):
     limit = max(1, params.limit)
     offset = max(0, params.offset)
-    search = params.search
 
     filters = [Book.deleted_at.is_(None)]
 
-    if search:
-        search_pattern = f'%{search}%'
-
-        search_filters = or_(
-            Book.isbn.ilike(search_pattern),
-            Book.title.ilike(search_pattern),
-            Book.author.ilike(search_pattern),
+    if params.search:
+        search_pattern = f'%{params.search}%'
+        filters.append(
+            or_(
+                Book.title.ilike(search_pattern),
+                Book.author.ilike(search_pattern),
+                Book.isbn.ilike(search_pattern),
+            )
         )
 
-        filters.append(search_filters)
+    count_stmt = select(func.count()).select_from(Book).where(*filters)
+    total = (await session.scalar(count_stmt)) or 0
 
-    total: int = (
-        await session.scalar(
-            select(func.count()).select_from(Book).where(*filters)
-        )
-    ) or 0
-
-    query_stmt = (
+    stmt = (
         select(Book)
-        .options(
-            selectinload(Book.loans),
-        )
-        .order_by(Book.title)
+        .options(selectinload(Book.loans))
+        .where(*filters)
+        .order_by(Book.title.asc())
         .offset(offset)
         .limit(limit)
-        .where(*filters)
     )
 
-    query = await session.scalars(query_stmt)
-    books = query.all()
+    books = (await session.scalars(stmt)).unique().all()
 
-    total_pages = math.ceil(total / limit) if limit > 0 else 1
-    page = (offset // limit) + 1 if limit > 0 else 1
-    has_next = (offset + limit) < total
-    has_prev = offset > 0
+    total_pages = (total + limit - 1) // limit
+    current_page = (offset // limit) + 1
 
     meta = PageMeta(
         total=total,
-        page=page,
+        page=current_page,
         size=limit,
         total_pages=total_pages,
-        has_next=has_next,
-        has_prev=has_prev,
+        has_next=offset + limit < total,
+        has_prev=offset > 0,
         offset=offset,
     )
 
@@ -163,8 +170,17 @@ async def update_book(
     session: Session,
     book_id: int,
     book_update: BookUpdateSchema,
-    current_user: VerifyAdminCoord,
+    current_user: CurrentUser,
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to update this loan.',
+        )
+
     book_db = await session.scalar(
         select(Book).where(Book.id == book_id, Book.deleted_at.is_(None))
     )
@@ -203,8 +219,17 @@ async def update_book(
 
 @router.delete('/books/{book_id}', status_code=HTTPStatus.NO_CONTENT)
 async def soft_delete_book(
-    session: Session, book_id: int, current_user: VerifyAdminCoord
+    session: Session, book_id: int, current_user: CurrentUser
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to delete this loan.',
+        )
+
     book_db = await session.scalar(
         select(Book).where(Book.id == book_id, Book.deleted_at.is_(None))
     )
@@ -265,7 +290,9 @@ async def cancel_loan(
     loan_id: int, session: Session, current_user: CurrentUser
 ):
     loan_db = await session.scalar(
-        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan)
+        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
     if not loan_db:
@@ -276,7 +303,13 @@ async def cancel_loan(
             status_code=400, detail='Only pending requests can be canceled.'
         )
 
-    loan_db.status = LoanStatus.CANCELED
+    if loan_db.user_id != current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to cancel this loan.',
+        )
+
+    loan_db.mark_as_canceled()
     loan_db.updated_by_id = current_user.id
     loan_db.updated_at = datetime.utcnow()
 
@@ -294,8 +327,17 @@ async def cancel_loan(
 async def approve_and_start_loan(
     session: Session,
     loan_id: int,
-    current_user: VerifyAdminCoord,
+    current_user: CurrentUser,
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to approve this loan.',
+        )
+
     loan_db = await session.scalar(
         select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
@@ -330,7 +372,9 @@ async def return_loan(
     current_user: CurrentUser,
 ):
     loan_db = await session.scalar(
-        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan)
+        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
     if not loan_db:
@@ -339,7 +383,10 @@ async def return_loan(
             detail=f'Loan with id ({loan_id}) not found.',
         )
 
-    if loan_db.user_id != current_user.id:
+    if loan_db.user_id != current_user.id and current_user.role not in {
+        'admin',
+        'coord',
+    }:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='You are not allowed to return this loan.',
@@ -364,10 +411,21 @@ async def return_loan(
     response_model=LoanBriefSchema,
 )
 async def reject_loan(
-    session: Session, loan_id: int, current_user: VerifyAdminCoord
+    session: Session, loan_id: int, current_user: CurrentUser
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to return this loan.',
+        )
+
     loan_db = await session.scalar(
-        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan)
+        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
     if not loan_db:
@@ -396,9 +454,18 @@ async def reject_loan(
 )
 async def list_loans(
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CurrentUser,
     params: Annotated[LoanQueryParams, Depends()],
 ):
+    if current_user.id and current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to return this loan.',
+        )
+
     stmt = select(Loan).options(
         selectinload(Loan.book),
         selectinload(Loan.user),
@@ -406,6 +473,7 @@ async def list_loans(
     )
 
     filters = []
+    joins = []
 
     if params.status:
         try:
@@ -419,28 +487,50 @@ async def list_loans(
 
     if params.search:
         search_pattern = f'%{params.search}%'
+        joins.append((Loan.book, Book))
+        joins.append((Loan.user, User))
+
         filters.append(
             or_(
                 Book.title.ilike(search_pattern),
                 Book.author.ilike(search_pattern),
                 Book.isbn.ilike(search_pattern),
-                Loan.user.has(User.name.ilike(search_pattern)),
+                User.name.ilike(search_pattern),
             )
         )
+
+    for relationship, model in joins:
+        stmt = stmt.join(relationship)
 
     if filters:
         stmt = stmt.where(*filters)
 
-    total = (
-        await session.scalar(select(func.count()).select_from(stmt.subquery()))
-    ) or 0
+    stmt = stmt.distinct()
+    count_stmt = select(func.count(func.distinct(Loan.id))).select_from(Loan)
 
-    sort_column = getattr(Loan, params.sort_by)
+    for relationship, model in joins:
+        count_stmt = count_stmt.join(relationship)
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+
+    total = (await session.scalar(count_stmt)) or 0
+
+    sort_field = params.sort_by.lower() if params.sort_by else 'id'
+
+    if sort_field not in ALLOWED_SORT_FIELDS:
+        allowed = ', '.join(ALLOWED_SORT_FIELDS.keys())
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Invalid sort field '{params.sort_by}'. "
+            f'Allowed: {allowed}',
+        )
+
+    sort_column = ALLOWED_SORT_FIELDS[sort_field]
     sort_func = asc if params.sort_order == 'asc' else desc
     stmt = stmt.order_by(sort_func(sort_column))
-    stmt = stmt.offset(params.offset).limit(params.limit)
 
-    loans = (await session.scalars(stmt)).all()
+    stmt = stmt.offset(params.offset).limit(params.limit)
+    loans = (await session.scalars(stmt)).unique().all()
 
     total_pages = (total + params.limit - 1) // params.limit
     current_page = (params.offset // params.limit) + 1
@@ -488,16 +578,29 @@ async def list_my_loans(
                 detail=f"Invalid status '{params.status}'",
             )
 
-    total = (
-        await session.scalar(select(func.count()).select_from(stmt.subquery()))
-    ) or 0
+    count_stmt = (
+        select(func.count())
+        .select_from(Loan)
+        .where(Loan.user_id == current_user.id)
+    )
+    if params.status:
+        count_stmt = count_stmt.where(Loan.status == status_enum)
+    total = (await session.scalar(count_stmt)) or 0
 
-    sort_column = getattr(Loan, params.sort_by, Loan.created_at)
+    sort_field = params.sort_by.lower() if params.sort_by else 'created_at'
+    if sort_field not in ALLOWED_SORT_FIELDS:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Invalid sort field '{params.sort_by}'. "
+            f'Allowed: {", ".join(ALLOWED_SORT_FIELDS.keys())}',
+        )
+
+    sort_column = ALLOWED_SORT_FIELDS[sort_field]
     sort_func = asc if params.sort_order == 'asc' else desc
     stmt = stmt.order_by(sort_func(sort_column))
 
     stmt = stmt.offset(params.offset).limit(params.limit)
-    loans = (await session.scalars(stmt)).all()
+    loans = (await session.scalars(stmt)).unique().all()
 
     total_pages = (total + params.limit - 1) // params.limit
     current_page = (params.offset // params.limit) + 1
@@ -512,5 +615,4 @@ async def list_my_loans(
         offset=params.offset,
     )
 
-    loan_schemas = [LoanSchema.from_orm(loan) for loan in loans]
-    return PaginatedLoansList(meta=meta, loans=loan_schemas)
+    return PaginatedLoansList(meta=meta, loans=loans)
