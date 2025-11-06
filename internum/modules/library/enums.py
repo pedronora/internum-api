@@ -1,7 +1,7 @@
-import enum
+from enum import Enum
 
 
-class LoanStatus(str, enum.Enum):
+class LoanStatus(str, Enum):
     REQUESTED = 'requested'
     BORROWED = 'borrowed'
     RETURNED = 'returned'
