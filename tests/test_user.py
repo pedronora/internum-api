@@ -16,6 +16,7 @@ def test_create_user(client, mock_db_time, token_admin):
                 'username': 'User_1',
                 'password': '@1Senha-teste',
                 'email': 'TEST@test.com',
+                'birthday': '2020-01-01',
                 'role': 'user',
                 'setor': 'oficial',
                 'subsetor': 'titular',
@@ -30,6 +31,7 @@ def test_create_user(client, mock_db_time, token_admin):
     assert data['name'] == 'Pedro Nora'
     assert data['username'] == 'User_1'
     assert data['email'] == 'test@test.com'
+    assert data['birthday'] == '2020-01-01'
     assert data['created_at'] == time.isoformat()
 
 
@@ -42,6 +44,7 @@ def test_create_user_without_permission(client, mock_db_time, token):
             'username': 'User_1',
             'password': 'senha-teste',
             'email': 'test@test.com',
+            'birthday': '2020-01-01',
             'role': 'user',
             'setor': 'oficial',
             'subsetor': 'titular',
@@ -61,6 +64,7 @@ def test_create_user_with_existent_username(client, user, token_admin):
             'username': user.username,
             'password': user.clean_password,
             'email': 'other@mail.com',
+            'birthday': '2020-01-01',
             'setor': user.setor,
             'subsetor': user.subsetor,
             'role': user.role,
@@ -80,6 +84,7 @@ def test_create_user_with_existent_email(client, user, token_admin):
             'username': 'new_username',
             'password': user.clean_password,
             'email': user.email,
+            'birthday': '2020-01-01',
             'setor': user.setor,
             'subsetor': user.subsetor,
             'role': user.role,
@@ -133,18 +138,16 @@ def test_get_user_by_id_not_found(client, token_admin):
     )
 
 
-def test_get_user_by_id_inactive(client, user, token):
-    user.active = False
-
+def test_get_user_by_id_inactive(client, user_inactive, token_admin):
     response = client.get(
-        f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        f'{ENDPOINT_URL}/{user_inactive.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert (
         response.json()['detail']
-        == f'Não encontrado usuário com id ({user.id}).'
+        == f'Não encontrado usuário com id ({user_inactive.id}).'
     )
 
 
@@ -152,7 +155,6 @@ def test_update_user_success(client, user, token):
     update_data = {
         'name': 'Novo Nome',
         'email': 'novo.email@test.com',
-        'subsetor': 'Novo Subsetor',
     }
 
     response = client.put(
@@ -162,10 +164,10 @@ def test_update_user_success(client, user, token):
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()['name'] == 'Novo Nome'
-    assert response.json()['email'] == 'novo.email@test.com'
-    assert response.json()['subsetor'] == 'Novo Subsetor'
-    assert response.json()['username'] == user.username
+    resp_json = response.json()
+    assert resp_json['name'] == 'Novo Nome'
+    assert resp_json['email'] == 'novo.email@test.com'
+    assert resp_json['username'] == user.username
 
 
 def test_update_email_upper_char(client, user, token):
@@ -196,6 +198,23 @@ def test_update_user_partial_data(client, user, token):
     assert response.json()['name'] == 'Nome Parcial'
     assert response.json()['email'] == user.email
     assert response.json()['username'] == user.username
+
+
+def test_update_user_restricted_fields_forbidden(client, user, token):
+    update_data = {
+        'subsetor': 'Novo Subsetor',
+        'role': 'admin',
+        'active': False,
+    }
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert 'Acesso negado' in response.json()['detail']
 
 
 def test_update_user_all_fields(client, user, token_admin):
@@ -237,7 +256,8 @@ def test_update_role_without_permissions(client, user, token):
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == (
-        'Acesso negado: usuário sem permissão para definir atribuição (role)'
+        'Acesso negado: usuário sem permissão para definir os '
+        'campos perfil, setor, subsetor e ativo'
     )
 
 
@@ -413,32 +433,42 @@ def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
 
 
 def test_user_change_pwd(client, user, token):
+    data = {'old_password': user.clean_password, 'new_password': '@Aa12345678'}
+
     response = client.post(
         f'{ENDPOINT_URL}/{user.id}/change-password',
         headers={'Authorization': f'Bearer {token}'},
-        json={'password': '@Aa12345678'},
+        json=data,
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()['message'] == 'Senha alterado com sucesso'
+    assert response.json()['message'] == 'Senha alterada com sucesso'
 
 
 def test_user_change_with_same_pwd(client, user, token):
+    data = {
+        'old_password': user.clean_password,
+        'new_password': user.clean_password,
+    }
     response = client.post(
         f'{ENDPOINT_URL}/{user.id}/change-password',
         headers={'Authorization': f'Bearer {token}'},
-        json={'password': user.clean_password},
+        json=data,
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert response.json()['detail'] == 'Senha nova igual à atual'
+    assert response.json()['detail'] == 'Senha nova igual à atual.'
 
 
 def test_change_pwd_user_not_found(client, token_admin):
+    data = {
+        'old_password': '@Aa12345678',
+        'new_password': '@Aa12345678@',
+    }
     response = client.post(
         f'{ENDPOINT_URL}/9999/change-password',
         headers={'Authorization': f'Bearer {token_admin}'},
-        json={'password': '@Aa12345678'},
+        json=data,
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
