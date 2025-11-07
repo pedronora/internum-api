@@ -2,10 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Query
-from pydantic import (
-    BaseModel,
-    Field,
-)
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserPublic(BaseModel):
@@ -16,6 +13,12 @@ class UserPublic(BaseModel):
 class NoticeCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
+
+    @field_validator('title', 'content', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
 
 
 class NoticeReadSchema(BaseModel):

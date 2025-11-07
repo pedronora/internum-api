@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from internum.core.schemas import AuditSchema
 from internum.modules.library.enums import LoanStatus
@@ -108,6 +108,12 @@ class BookCreateSchema(BaseModel):
     edition: int
     year: int
 
+    @field_validator('title', 'author', 'publisher', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
+
 
 class BookUpdateSchema(BaseModel):
     title: Optional[str] = None
@@ -116,6 +122,12 @@ class BookUpdateSchema(BaseModel):
     edition: Optional[int] = None
     year: Optional[int] = None
     quantity: Optional[int] = None
+
+    @field_validator('title', 'author', 'publisher', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
 
 
 class BookQueryParams(BaseModel):

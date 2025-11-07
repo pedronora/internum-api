@@ -2,25 +2,36 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserPublic(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LegalBriefCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
 
+    @field_validator('title', 'content', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
+
 
 class LegalBriefUpdate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
+
+    @field_validator('title', 'content', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
 
 
 class LegalBriefRevisionSchema(BaseModel):
