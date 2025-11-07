@@ -169,15 +169,20 @@ async def update_user(
 
     for field, value in update_data.items():
         if value is not None and hasattr(db_user, field):
-            if field == 'role' and current_user.role not in {
+            if field in {
+                'role',
+                'setor',
+                'subsetor',
+                'active',
+            } and current_user.role not in {
                 'admin',
                 'coord',
             }:
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN,
                     detail=(
-                        'Acesso negado: '
-                        'usuário sem permissão para definir atribuição (role)'
+                        'Acesso negado: usuário sem permissão para definir os '
+                        'campos perfil, setor, subsetor e ativo'
                     ),
                 )
             setattr(db_user, field, value)
@@ -232,7 +237,7 @@ async def deactivate_user(
 )
 async def change_password(
     user_id: int,
-    new_pwd: UserChangePassword,
+    passwords: UserChangePassword,
     session: Session,
     current_user: VerifySelfAdmin,
 ):
@@ -244,13 +249,19 @@ async def change_password(
             detail=f'Não encontrado usuário com id ({user_id}).',
         )
 
-    if verify_password(new_pwd.password, db_user.password):
+    if not verify_password(passwords.old_password, db_user.password):
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail='Senha nova igual à atual',
+            detail='Senha antiga incorreta.',
         )
 
-    db_user.password = get_password_hash(new_pwd.password)
+    if verify_password(passwords.new_password, db_user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Senha nova igual à atual.',
+        )
+
+    db_user.password = get_password_hash(passwords.new_password)
     await session.commit()
 
-    return {'message': 'Senha alterado com sucesso'}
+    return {'message': 'Senha alterada com sucesso'}

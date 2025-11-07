@@ -23,7 +23,6 @@ class LegalBrief:
     )
     created_by: Mapped['User'] = relationship(
         foreign_keys=[created_by_id],
-        back_populates='legal_briefs',
         init=False,
     )
 

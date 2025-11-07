@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import Query
@@ -37,6 +37,7 @@ class UserBase(BaseModel):
     name: str
     username: str
     email: EmailStr
+    birthday: date
     setor: Setor
     subsetor: str
     role: Role = Role.USER
@@ -57,8 +58,9 @@ class UserCreate(UserBase):
 
 
 class UserChangePassword(BaseModel):
-    password: str
-    _validate_password = validator('password', allow_reuse=True)(
+    old_password: str
+    new_password: str
+    _validate_password = validator('new_password', allow_reuse=True)(
         validate_password_complexity
     )
 
@@ -67,6 +69,7 @@ class UserRead(UserBase):
     id: int
     created_at: datetime
     updated_at: datetime | None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -89,6 +92,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=4)
     username: Optional[str] = Field(None, min_length=4)
     email: Optional[EmailStr] = None
+    birthday: Optional[date] = None
     setor: Optional[Setor] = None
     subsetor: Optional[str] = Field(None, min_length=4)
     role: Optional[Role] = None

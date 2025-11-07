@@ -11,6 +11,7 @@ from internum.modules.library.enums import LoanStatus
 class UserBriefSchema(BaseModel):
     id: int
     name: str
+    email: str
 
     model_config = dict(from_attributes=True)
 

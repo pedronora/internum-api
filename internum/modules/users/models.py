@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, func
+from sqlalchemy import Boolean, Date, func
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +20,7 @@ class User:
     name: Mapped[str]
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
+    birthday: Mapped[date | None] = mapped_column(Date, nullable=False)
     email: Mapped[str] = mapped_column(unique=True)
     setor: Mapped[Setor] = mapped_column(
         SqlEnum(Setor, name='setor_enum'), nullable=False
@@ -35,18 +36,7 @@ class User:
         lazy='selectin',
         init=False,
     )
-    legal_briefs: Mapped[list['LegalBrief']] = relationship(
-        back_populates='created_by',
-        cascade='all, delete-orphan',
-        init=False,
-        lazy='selectin',
-        foreign_keys='LegalBrief.created_by_id',
-    )
-    revisions: Mapped[list['LegalBriefRevision']] = relationship(
-        back_populates='updated_by',
-        init=False,
-        lazy='selectin',
-    )
+
     role: Mapped[Role] = mapped_column(
         SqlEnum(Role, name='role_enum'), default=Role.USER, nullable=False
     )

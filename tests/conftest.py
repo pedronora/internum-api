@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 
 import factory
 import pytest
@@ -32,6 +32,11 @@ class UserFactory(factory.Factory):
         lower_case=True,
     )
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
+    birthday = factory.Faker(
+        'date_between_dates',
+        date_start=date(1970, 1, 1),
+        date_end=date(2005, 12, 31),
+    )
     role = Role.USER
     setor = Setor.REGISTRO
     subsetor = 'Análise'
