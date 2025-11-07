@@ -46,6 +46,8 @@ async def list_unread_notices(
     )
     filters.append(unread_filter)
 
+    filters.append(Notice.created_at > current_user.created_at)
+
     if search:
         search_pattern = f'%{search}%'
         search_filters = or_(
