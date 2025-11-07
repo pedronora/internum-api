@@ -49,6 +49,12 @@ class UserBase(BaseModel):
             return v.strip().lower()
         return v  # pragma: no cover
 
+    @field_validator('name', 'username', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v  # pragma: no cover
+
 
 class UserCreate(UserBase):
     password: str
@@ -102,6 +108,12 @@ class UserUpdate(BaseModel):
     def normalize_email(cls, v):
         if v and isinstance(v, str):
             return v.strip().lower()
+        return v  # pragma: no cover
+
+    @field_validator('name', 'username', mode='before')
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
         return v  # pragma: no cover
 
 
