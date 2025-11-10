@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Annotated, Sequence
 
 from fastapi import Depends
-from sqlalchemy import and_, extract, func, select
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,26 +42,23 @@ class HomeService:
     async def _get_unread_notices_summary(
         self, current_user_id: int, user_created_at: datetime
     ):
+        created_after_user = Notice.created_at > user_created_at
+        not_read_by_user = ~Notice.reads.any(
+            NoticeRead.user_id == current_user_id
+        )
+
         total_unread = await self.session.scalar(
             select(func.count(Notice.id)).where(
-                ~Notice.reads.any(
-                    and_(
-                        NoticeRead.user_id == current_user_id,
-                        Notice.created_at > user_created_at,
-                    )
-                )
+                created_after_user,
+                not_read_by_user,
             )
         )
 
         unread_notices_result = await self.session.scalars(
             select(Notice)
             .where(
-                ~Notice.reads.any(
-                    and_(
-                        NoticeRead.user_id == current_user_id,
-                        Notice.created_at > user_created_at,
-                    )
-                )
+                created_after_user,
+                not_read_by_user,
             )
             .order_by(Notice.created_at.desc())
             .limit(3)
