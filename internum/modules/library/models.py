@@ -113,7 +113,7 @@ class Loan(AuditMixin):
     def check_overdue(self):
         if (
             self.status == LoanStatus.BORROWED
-            and self.due_date
-            and self.due_date < datetime.utcnow()
+            and self.due_date.date()
+            and self.due_date.date() < datetime.utcnow().date()
         ):
             self.status = LoanStatus.LATE
