@@ -1,13 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from internum.core.database import get_session
+from internum.core.email import EmailService
 from internum.core.permissions import CurrentUser
 from internum.modules.library.enums import LoanStatus
 from internum.modules.library.models import Book, Loan
@@ -27,6 +29,9 @@ from internum.modules.users.models import User
 
 router = APIRouter(prefix='/library', tags=['Library'])
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+email_service = EmailService()
+
 
 ALLOWED_SORT_FIELDS = {
     'id': Loan.id,
@@ -252,7 +257,10 @@ async def soft_delete_book(
     response_model=LoanBriefSchema,
 )
 async def request_loan(
-    session: Session, book_id: int, current_user: CurrentUser
+    session: Session,
+    book_id: int,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     book_db = await session.scalar(
         select(Book).where(Book.id == book_id, Book.deleted_at.is_(None))
@@ -278,6 +286,44 @@ async def request_loan(
     await session.commit()
     await session.refresh(new_loan)
 
+    requested_dt = new_loan.created_at.replace(tzinfo=timezone.utc)
+    requested_str = requested_dt.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y %H:%M:%S')
+
+    html_content = f"""
+    <html>
+      <body
+        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #4CAF50;">
+            Confirmação de Solicitação de Empréstimo
+        </h2>
+        <p>Olá, {current_user.name}:</p>
+        <p>Seu pedido de empréstimo foi registrado com sucesso e será avaliado
+         pela coordenação.</p>
+        <h3>Detalhes do Livro:</h3>
+        <ul>
+          <li><strong>Título:</strong> {book_db.title}</li>
+          <li><strong>Autor:</strong> {book_db.author}</li>
+        </ul>
+        <p><strong>Data/Hora da Solicitação:</strong> {requested_str}</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #888;">
+          Esta é uma mensagem automática do sistema I
+          nternum - 1º SRI de Cascavel/PR.
+        </p>
+      </body>
+    </html>
+    """
+
+    background_tasks.add_task(
+        email_service.send_email,
+        email_to=[current_user.email],
+        subject='[Internhum] Confirmação de Solicitação de Empréstimo',
+        html=html_content,
+        category='Loan Request',
+    )
+
     return new_loan
 
 
@@ -287,7 +333,10 @@ async def request_loan(
     response_model=LoanBriefSchema,
 )
 async def cancel_loan(
-    loan_id: int, session: Session, current_user: CurrentUser
+    loan_id: int,
+    session: Session,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     loan_db = await session.scalar(
         select(Loan)
@@ -316,6 +365,44 @@ async def cancel_loan(
     await session.commit()
     await session.refresh(loan_db)
 
+    canceled_dt = loan_db.updated_at.replace(tzinfo=timezone.utc)
+
+    canceled_str = canceled_dt.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y %H:%M:%S')
+
+    html_content = f"""
+    <html>
+      <body
+        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #4CAF50;">
+            Confirmação de Cancelamento de Empréstimo
+        </h2>
+        <p>Olá, {current_user.name}:</p>
+        <p>Você cancelou seu pedido de emréstimo.</p>
+        <h3>Detalhes do Empréstimo:</h3>
+        <ul>
+          <li><strong>Título:</strong> {loan_db.book.title}</li>
+          <li><strong>Autor:</strong> {loan_db.book.author}</li>
+        </ul>
+        <p><strong>Data/Hora do Cancelamento:</strong> {canceled_str}</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #888;">
+          Esta é uma mensagem automática do sistema I
+          nternum - 1º SRI de Cascavel/PR.
+        </p>
+      </body>
+    </html>
+    """
+
+    background_tasks.add_task(
+        email_service.send_email,
+        email_to=[current_user.email],
+        subject='[Internhum] Confirmação de Cancelamento de Empréstimo',
+        html=html_content,
+        category='Loan Cancel',
+    )
+
     return loan_db
 
 
@@ -328,6 +415,7 @@ async def approve_and_start_loan(
     session: Session,
     loan_id: int,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     if current_user.role not in {
         'admin',
@@ -339,7 +427,9 @@ async def approve_and_start_loan(
         )
 
     loan_db = await session.scalar(
-        select(Loan).where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        select(Loan)
+        .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        .options(selectinload(Loan.book))
     )
 
     if not loan_db:
@@ -358,6 +448,49 @@ async def approve_and_start_loan(
     await session.commit()
     await session.refresh(loan_db)
 
+    requested_dt = loan_db.borrowed_at.replace(tzinfo=timezone.utc)
+    due_dt = loan_db.due_date.replace(tzinfo=timezone.utc)
+
+    requested_str = requested_dt.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y %H:%M:%S')
+    due_date_str = due_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime(
+        '%d/%m/%Y'
+    )
+
+    html_content = f"""
+    <html>
+      <body
+        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #4CAF50;">
+            Confirmação de Aprovação de Empréstimo
+        </h2>
+        <p>Olá, {current_user.name}:</p>
+        <p>Seu pedido de empréstimo foi aprovado pela coordenação.</p>
+        <h3>Detalhes do Empréstimo:</h3>
+        <ul>
+          <li><strong>Título:</strong> {loan_db.book.title}</li>
+          <li><strong>Autor:</strong> {loan_db.book.author}</li>
+          <li><strong>Devolver até:</strong> {due_date_str}
+        </ul>
+        <p><strong>Data/Hora da Solicitação:</strong> {requested_str}</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #888;">
+          Esta é uma mensagem automática do sistema I
+          nternum - 1º SRI de Cascavel/PR.
+        </p>
+      </body>
+    </html>
+    """
+
+    background_tasks.add_task(
+        email_service.send_email,
+        email_to=[current_user.email],
+        subject='[Internhum] Confirmação de Aprovação de Empréstimo',
+        html=html_content,
+        category='Loan Approve',
+    )
+
     return loan_db
 
 
@@ -370,6 +503,7 @@ async def return_loan(
     session: Session,
     loan_id: int,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     loan_db = await session.scalar(
         select(Loan)
@@ -402,6 +536,44 @@ async def return_loan(
     await session.commit()
     await session.refresh(loan_db)
 
+    returned_dt = loan_db.returned_at.replace(tzinfo=timezone.utc)
+
+    returned_str = returned_dt.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y %H:%M:%S')
+
+    html_content = f"""
+    <html>
+      <body
+        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #4CAF50;">
+            Confirmação de Devolução de Empréstimo
+        </h2>
+        <p>Olá, {current_user.name}:</p>
+        <p>Seu empréstimo foi devolvido com sucesso.</p>
+        <h3>Detalhes do Empréstimo:</h3>
+        <ul>
+          <li><strong>Título:</strong> {loan_db.book.title}</li>
+          <li><strong>Autor:</strong> {loan_db.book.author}</li>
+        </ul>
+        <p><strong>Data/Hora da Devolução:</strong> {returned_str}</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #888;">
+          Esta é uma mensagem automática do sistema I
+          nternum - 1º SRI de Cascavel/PR.
+        </p>
+      </body>
+    </html>
+    """
+
+    background_tasks.add_task(
+        email_service.send_email,
+        email_to=[current_user.email],
+        subject='[Internhum] Confirmação de Devolução de Empréstimo',
+        html=html_content,
+        category='Loan Return',
+    )
+
     return loan_db
 
 
@@ -411,7 +583,10 @@ async def return_loan(
     response_model=LoanBriefSchema,
 )
 async def reject_loan(
-    session: Session, loan_id: int, current_user: CurrentUser
+    session: Session,
+    loan_id: int,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ):
     if current_user.role not in {
         'admin',
@@ -443,6 +618,47 @@ async def reject_loan(
     session.add(loan_db)
     await session.commit()
     await session.refresh(loan_db)
+
+    reject_dt = loan_db.returned_at.replace(tzinfo=timezone.utc)
+
+    reject_str = reject_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime(
+        '%d/%m/%Y %H:%M:%S'
+    )
+
+    html_content = f"""
+    <html>
+      <body
+        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #4CAF50;">
+            Informação de Rejeição de Empréstimo
+        </h2>
+        <p>Olá, {current_user.name}:</p>
+        <p>
+        Seu empréstimo foi rejeitado pela coordenação. Para maiores detalhes, 
+        procure seu coordendador
+        </p>
+        <h3>Detalhes do Empréstimo:</h3>
+        <ul>
+          <li><strong>Título:</strong> {loan_db.book.title}</li>
+          <li><strong>Autor:</strong> {loan_db.book.author}</li>
+        </ul>
+        <p><strong>Data/Hora da Rejeição:</strong> {reject_str}</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #888;">
+          Esta é uma mensagem automática do sistema I
+          nternum - 1º SRI de Cascavel/PR.
+        </p>
+      </body>
+    </html>
+    """  # noqa: W291
+
+    background_tasks.add_task(
+        email_service.send_email,
+        email_to=[current_user.email],
+        subject='[Internhum] Informação de Rejeição de Empréstimo',
+        html=html_content,
+        category='Loan Reject',
+    )
 
     return loan_db
 
