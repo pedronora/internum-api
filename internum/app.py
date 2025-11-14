@@ -1,4 +1,3 @@
-import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,8 +16,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='Internum API - 1 RI Cascavel', lifespan=lifespan)
 
-
-time.tzset()
 
 origins = [
     'http://localhost:5173',
