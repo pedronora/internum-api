@@ -594,7 +594,7 @@ async def reject_loan(
     }:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to return this loan.',
+            detail='You are not allowed to reject this loan.',
         )
 
     loan_db = await session.scalar(
@@ -619,7 +619,7 @@ async def reject_loan(
     await session.commit()
     await session.refresh(loan_db)
 
-    reject_dt = loan_db.returned_at.replace(tzinfo=timezone.utc)
+    reject_dt = loan_db.updated_at.replace(tzinfo=timezone.utc)
 
     reject_str = reject_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime(
         '%d/%m/%Y %H:%M:%S'
@@ -679,7 +679,7 @@ async def list_loans(
     }:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to return this loan.',
+            detail='Access forbidden. User role does not permit this action.',
         )
 
     stmt = select(Loan).options(
@@ -731,16 +731,7 @@ async def list_loans(
 
     total = (await session.scalar(count_stmt)) or 0
 
-    sort_field = params.sort_by.lower() if params.sort_by else 'id'
-
-    if sort_field not in ALLOWED_SORT_FIELDS:
-        allowed = ', '.join(ALLOWED_SORT_FIELDS.keys())
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"Invalid sort field '{params.sort_by}'. "
-            f'Allowed: {allowed}',
-        )
-
+    sort_field = params.sort_by
     sort_column = ALLOWED_SORT_FIELDS[sort_field]
     sort_func = asc if params.sort_order == 'asc' else desc
     stmt = stmt.order_by(sort_func(sort_column))
@@ -803,14 +794,7 @@ async def list_my_loans(
         count_stmt = count_stmt.where(Loan.status == status_enum)
     total = (await session.scalar(count_stmt)) or 0
 
-    sort_field = params.sort_by.lower() if params.sort_by else 'created_at'
-    if sort_field not in ALLOWED_SORT_FIELDS:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=f"Invalid sort field '{params.sort_by}'. "
-            f'Allowed: {", ".join(ALLOWED_SORT_FIELDS.keys())}',
-        )
-
+    sort_field = params.sort_by
     sort_column = ALLOWED_SORT_FIELDS[sort_field]
     sort_func = asc if params.sort_order == 'asc' else desc
     stmt = stmt.order_by(sort_func(sort_column))

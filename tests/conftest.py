@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import date, datetime
+from unittest.mock import MagicMock
 
 import factory
 import pytest
@@ -184,3 +185,14 @@ async def other_user(session):
     await session.refresh(user)
 
     return user
+
+
+@pytest.fixture(autouse=True)
+def mock_email_service(monkeypatch):
+    from internum.core import email  # noqa: PLC0415
+
+    fake_send = MagicMock()
+
+    monkeypatch.setattr(email.EmailService, 'send_email', fake_send)
+
+    return fake_send
