@@ -117,3 +117,5 @@ class Loan(AuditMixin):
             and self.due_date.date() < datetime.utcnow().date()
         ):
             self.status = LoanStatus.LATE
+            return True
+        return False
