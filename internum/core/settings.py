@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str
     ADMIN_EMAIL: str
     ADMIN_PASSWORD: str
+    MAILTRAP_TOKEN: str
 
     def __init__(self, **values):
         super().__init__(**values)
