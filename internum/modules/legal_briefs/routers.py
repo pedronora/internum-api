@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from internum.core.database import get_session
-from internum.core.permissions import CurrentUser, VerifyAdmin
+from internum.core.permissions import CurrentUser
 from internum.modules.legal_briefs.models import LegalBrief, LegalBriefRevision
 from internum.modules.legal_briefs.schemas import (
     LegalBriefCreate,
@@ -28,13 +28,23 @@ Session = Annotated[AsyncSession, Depends(get_session)]
     '/', response_model=LegalBriefSchema, status_code=HTTPStatus.CREATED
 )
 async def create_legal_brief(
-    legal_brief: LegalBriefCreate, session: Session, user: VerifyAdmin
+    legal_brief: LegalBriefCreate, session: Session, current_user: CurrentUser
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to create a LegalBrief.',
+        )
+
     db_legal_brief = LegalBrief(
         title=legal_brief.title.upper().strip(),
         content=legal_brief.content,
-        created_by_id=user.id,
     )
+
+    db_legal_brief.created_by_id = current_user.id
 
     try:
         session.add(db_legal_brief)
@@ -161,8 +171,17 @@ async def update_legal_brief(
     legal_brief_id: int,
     data: LegalBriefUpdate,
     session: Session,
-    current_user: VerifyAdmin,
+    current_user: CurrentUser,
 ):
+    if current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to update this LegalBrief.',
+        )
+
     current_brief = await session.scalar(
         select(LegalBrief).where(LegalBrief.id == legal_brief_id)
     )
@@ -184,8 +203,10 @@ async def update_legal_brief(
             brief_id=current_brief.id,
             title=current_brief.title,
             content=current_brief.content,
-            updated_by_id=current_user.id,
         )
+        revision.created_by_id = current_brief.created_by_id
+        revision.created_by = current_brief.created_by
+        revision.mark_updated(current_brief.id)
         session.add(revision)
 
         current_brief.title = data.title or current_brief.title
@@ -243,7 +264,7 @@ async def cancel_legal_brief(
         )
 
     db_legal_brief.canceled = True
-    db_legal_brief.canceled_by_id = current_user.id
+    db_legal_brief.canceled_by = current_user
 
     await session.commit()
     await session.refresh(db_legal_brief)

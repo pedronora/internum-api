@@ -14,7 +14,6 @@ class LegalBriefFactory(factory.Factory):
 
     title = factory.Faker('text')
     content = factory.Faker('text')
-    created_by_id = 1
 
 
 def test_create_legal_brief(client, user_admin, token_admin):
@@ -86,10 +85,12 @@ def test_create_legal_brief_data_missing_field(
 
 
 @pytest.mark.asyncio
-async def test_list_legal_briefs(session, client, user, token):
+async def test_list_legal_briefs(session, client, user, user_admin, token):
     total = 5
 
-    legal_briefs = LegalBriefFactory.create_batch(total, created_by_id=user.id)
+    legal_briefs = LegalBriefFactory.create_batch(total)
+    for lb in legal_briefs:
+        lb.created_by_id = user_admin.id
     session.add_all(legal_briefs)
     await session.commit()
 
@@ -104,10 +105,14 @@ async def test_list_legal_briefs(session, client, user, token):
 
 @pytest.mark.asyncio
 async def test_list_legal_briefs_with_search_param(
-    session, client, user, token
+    session, client, user, user_admin, token
 ):
-    legal_briefs = LegalBriefFactory.create_batch(3, created_by_id=user.id)
+    legal_briefs = LegalBriefFactory.create_batch(3)
+    for lb in legal_briefs:
+        lb.created_by_id = user_admin.id
+
     custom_legal_brief = LegalBriefFactory.create(title='Busca')
+    custom_legal_brief.created_by_id = user_admin.id
     legal_briefs.append(custom_legal_brief)
 
     session.add_all(legal_briefs)
@@ -129,7 +134,8 @@ async def test_get_legal_brief_by_id_success(
     user_admin,
     token_admin,
 ):
-    legal_brief = LegalBriefFactory(created_by_id=user_admin.id)
+    legal_brief = LegalBriefFactory()
+    legal_brief.created_by_id = user_admin.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)
@@ -167,8 +173,8 @@ async def test_update_legal_brief_creates_revision(
     brief = LegalBrief(
         title='Original',
         content='Conteúdo inicial',
-        created_by_id=user_admin.id,
     )
+    brief.created_by_id = user_admin.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
@@ -205,9 +211,8 @@ def test_update_legal_brief_not_found(session, client, token_admin):
 async def test_update_legal_brief_rollback_on_error(
     session, client, user_admin, token_admin
 ):
-    brief = LegalBrief(
-        title='Teste rollback', content='Conteúdo', created_by_id=user_admin.id
-    )
+    brief = LegalBrief(title='Teste rollback', content='Conteúdo')
+    brief.created_by_id = user_admin.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
@@ -235,14 +240,13 @@ async def test_update_legal_brief_rollback_on_error(
 async def test_update_canceled_brief_rejected(
     session, client, user_admin, token_admin
 ):
-    """Exemplo opcional: atualização bloqueada se canceled=True"""
     brief = LegalBrief(
         title='Cancelado',
         content='Antigo',
-        created_by_id=user_admin.id,
         canceled=True,
         canceled_by_id=user_admin.id,
     )
+    brief.created_by_id = user_admin.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
@@ -267,8 +271,8 @@ async def test_update_canceled_brief_rejected(
 async def test_cancel_legal_brief_success(
     client, session, user_admin, token_admin
 ):
-    legal_brief = LegalBriefFactory(created_by_id=user_admin.id)
-
+    legal_brief = LegalBriefFactory()
+    legal_brief.created_by_id = user_admin.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)
@@ -296,7 +300,8 @@ def test_cancel_legal_brief_not_found(client, token_admin):
 async def test_cancel_legal_brief_already_canceled(
     client, session, user_admin, token_admin
 ):
-    legal_brief = LegalBriefFactory(created_by_id=user_admin.id, canceled=True)
+    legal_brief = LegalBriefFactory(canceled=True)
+    legal_brief.created_by_id = user_admin.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)

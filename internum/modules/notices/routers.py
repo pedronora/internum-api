@@ -217,8 +217,17 @@ async def mark_as_read(
 async def create_notice(
     notice: NoticeCreate,
     session: Session,
-    author: VerifyAdminCoord,
+    author: CurrentUser,
 ):
+    if author.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='You are not allowed to create a Notice.',
+        )
+
     db_notice = Notice(title=notice.title, content=notice.content)
     db_notice.created_by_id = author.id
 
