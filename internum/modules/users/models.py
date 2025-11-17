@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, func
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from internum.core.models.registry import table_registry
 from internum.modules.users.enums import Role, Setor
@@ -26,16 +26,6 @@ class User:
         SqlEnum(Setor, name='setor_enum'), nullable=False
     )
     subsetor: Mapped[str] = mapped_column(nullable=False)
-    notices: Mapped[list['Notice']] = relationship(
-        back_populates='user', cascade='all, delete-orphan', init=False
-    )
-
-    reads: Mapped[list['NoticeRead']] = relationship(
-        back_populates='user',
-        cascade='all, delete-orphan',
-        lazy='selectin',
-        init=False,
-    )
 
     role: Mapped[Role] = mapped_column(
         SqlEnum(Role, name='role_enum'), default=Role.USER, nullable=False

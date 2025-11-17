@@ -38,7 +38,7 @@ class AuditMixin:
     def created_by_id(cls) -> Mapped[Optional[int]]:
         return mapped_column(
             ForeignKey('users.id', ondelete='SET NULL'),
-            nullable=True,
+            nullable=False,
             init=False,
         )
 

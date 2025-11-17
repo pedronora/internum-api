@@ -8,12 +8,8 @@ from internum.modules.library.models import Book, Loan, LoanStatus
 
 @pytest.mark.asyncio
 async def test_check_overdue_loans_marks_overdue(
-    session, mock_email_service, user
+    session, mock_email_service, user, user_admin
 ):
-    """
-    O job deve marcar empréstimos vencidos como OVERDUE e enviar e-mail.
-    """
-
     book = Book(
         isbn='123',
         title='Book',
@@ -24,6 +20,7 @@ async def test_check_overdue_loans_marks_overdue(
         quantity=1,
         available_quantity=0,
     )
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -33,6 +30,8 @@ async def test_check_overdue_loans_marks_overdue(
         user_id=user.id,
         status=LoanStatus.BORROWED,
     )
+
+    # overdue_loan.created_by_id = user.id
 
     overdue_loan.borrowed_at = datetime.now(timezone.utc) - timedelta(days=10)
     overdue_loan.due_date = datetime.now(timezone.utc) - timedelta(days=3)

@@ -42,7 +42,7 @@ async def list_unread_notices(
     filters = [Notice.active]
 
     unread_filter = not_(
-        Notice.reads.any(NoticeRead.user_id == current_user.id)
+        Notice.reads.any(NoticeRead.created_by_id == current_user.id)
     )
     filters.append(unread_filter)
 
@@ -53,7 +53,7 @@ async def list_unread_notices(
         search_filters = or_(
             Notice.title.ilike(search_pattern),
             Notice.content.ilike(search_pattern),
-            Notice.user.has(User.name.ilike(search_pattern)),
+            Notice.created_by.has(User.name.ilike(search_pattern)),
         )
         filters.append(search_filters)
 
@@ -66,7 +66,7 @@ async def list_unread_notices(
 
     query = await session.scalars(
         select(Notice)
-        .options(selectinload(Notice.user))
+        .options(selectinload(Notice.created_by))
         .where(*filters)
         .order_by(Notice.created_at.desc())
         .offset(offset)
@@ -104,7 +104,9 @@ async def list_read_notices(
 
     filters = [Notice.active]
 
-    unread_filter = Notice.reads.any(NoticeRead.user_id == current_user.id)
+    unread_filter = Notice.reads.any(
+        NoticeRead.created_by_id == current_user.id
+    )
 
     filters.append(unread_filter)
 
@@ -113,7 +115,7 @@ async def list_read_notices(
         search_filters = or_(
             Notice.title.ilike(search_pattern),
             Notice.content.ilike(search_pattern),
-            Notice.user.has(User.name.ilike(search_pattern)),
+            Notice.created_by.has(User.name.ilike(search_pattern)),
         )
         filters.append(search_filters)
 
@@ -126,7 +128,7 @@ async def list_read_notices(
 
     query = await session.scalars(
         select(Notice)
-        .options(selectinload(Notice.user))
+        .options(selectinload(Notice.created_by))
         .where(*filters)
         .order_by(Notice.created_at.desc())
         .offset(offset)
@@ -172,7 +174,7 @@ async def mark_as_read(
     db_notice = await session.scalar(
         select(Notice)
         .where((Notice.id == notice_id) & (Notice.active))
-        .options(selectinload(Notice.user))
+        .options(selectinload(Notice.created_by))
     )
 
     if not db_notice:
@@ -183,7 +185,7 @@ async def mark_as_read(
 
     read_record = await session.scalar(
         select(NoticeRead).where(
-            NoticeRead.user_id == current_user.id,
+            NoticeRead.created_by_id == current_user.id,
             NoticeRead.notice_id == notice_id,
         )
     )
@@ -195,7 +197,8 @@ async def mark_as_read(
             f'is already marked as read by user ({current_user.id}).',
         )
 
-    new_read = NoticeRead(user_id=current_user.id, notice_id=notice_id)
+    new_read = NoticeRead(notice_id=notice_id)
+    new_read.created_by_id = current_user.id
 
     try:
         session.add(new_read)
@@ -216,9 +219,8 @@ async def create_notice(
     session: Session,
     author: VerifyAdminCoord,
 ):
-    db_notice = Notice(
-        title=notice.title, content=notice.content, user_id=author.id
-    )
+    db_notice = Notice(title=notice.title, content=notice.content)
+    db_notice.created_by_id = author.id
 
     try:
         session.add(db_notice)
@@ -249,7 +251,7 @@ async def list_notices(
         search_filters = or_(
             Notice.title.ilike(search_pattern),
             Notice.content.ilike(search_pattern),
-            Notice.user.has(User.name.ilike(search_pattern)),
+            Notice.created_by.has(User.name.ilike(search_pattern)),
         )
         filters.append(search_filters)
 
@@ -262,7 +264,7 @@ async def list_notices(
 
     query = await session.scalars(
         select(Notice)
-        .options(selectinload(Notice.user))
+        .options(selectinload(Notice.created_by))
         .where(*filters)
         .order_by(Notice.created_at.desc())
         .offset(offset)
@@ -304,8 +306,10 @@ async def get_notice_by_id(
     db_notice = await session.scalar(
         select(Notice)
         .where((Notice.id == notice_id) & (Notice.active))
-        .options(selectinload(Notice.user))
-        .options(selectinload(Notice.reads).selectinload(NoticeRead.user))
+        .options(selectinload(Notice.created_by))
+        .options(
+            selectinload(Notice.reads).selectinload(NoticeRead.created_by)
+        )
     )
 
     if not db_notice:

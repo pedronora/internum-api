@@ -44,7 +44,7 @@ class HomeService:
     ):
         created_after_user = Notice.created_at > user_created_at
         not_read_by_user = ~Notice.reads.any(
-            NoticeRead.user_id == current_user_id
+            NoticeRead.created_by_id == current_user_id
         )
 
         total_unread = await self.session.scalar(

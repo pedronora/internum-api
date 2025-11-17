@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserPublic(BaseModel):
@@ -18,22 +18,30 @@ class NoticeCreate(BaseModel):
     def strip_whitespace(cls, v):
         if isinstance(v, str):
             return v.strip()
-        return v  # pragma: no cover
+        return v
 
 
 class NoticeReadSchema(BaseModel):
-    user: UserPublic
-    read_at: datetime
-
-
-class NoticeSchema(NoticeCreate):
-    id: int
-    active: bool
-    author: UserPublic = Field(
-        ..., validation_alias='user', serialization_alias='author'
-    )
+    created_by: UserPublic
     created_at: datetime
+
+
+class NoticeSchema(BaseModel):
+    id: int
+    title: str
+    content: str
+    active: bool
+
+    author: UserPublic = Field(
+        ..., validation_alias='created_by', serialization_alias='author'
+    )
+
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
     reads_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NoticeDetail(NoticeSchema):
@@ -56,10 +64,8 @@ class PaginatedNoticeList(BaseModel):
 
 
 class NoticeQueryParams(BaseModel):
-    limit: int = Query(
-        default=10, ge=1, description='Number of items per page'
-    )
-    offset: int = Query(default=0, ge=0, description='Number of items to skip')
+    limit: int = Query(default=10, ge=1)
+    offset: int = Query(default=0, ge=0)
 
     search: Optional[str] = Query(
         default=None,
