@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, func
+from sqlalchemy import Boolean, Date, DateTime, func
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,8 +44,14 @@ class User:
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        init=False, server_default=func.now()
+        DateTime(timezone=True),
+        server_default=func.timezone('UTC', func.now()),
+        init=False,
     )
+
     updated_at: Mapped[datetime] = mapped_column(
-        init=False, onupdate=func.now(), nullable=True
+        DateTime(timezone=True),
+        onupdate=func.timezone('UTC', func.now()),
+        nullable=True,
+        init=False,
     )

@@ -47,4 +47,5 @@ jobs:
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_BIRTHDAY: ${{ secrets.ADMIN_BIRTHDAY }}
           MAILTRAP_TOKEN: ${{ secrets.MAILTRAP_TOKEN }}
