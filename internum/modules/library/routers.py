@@ -272,7 +272,8 @@ async def request_loan(
             detail=f'Book with id ({book_id}) not found.',
         )
 
-    new_loan = Loan(book_id=book_id, user_id=current_user.id)
+    new_loan = Loan(book_id=book_id)
+    new_loan.created_by_id = current_user.id
 
     try:
         book_db.lend()
@@ -319,7 +320,7 @@ async def request_loan(
     background_tasks.add_task(
         email_service.send_email,
         email_to=[current_user.email],
-        subject='[Internhum] Confirmação de Solicitação de Empréstimo',
+        subject='[Internum] Confirmação de Solicitação de Empréstimo',
         html=html_content,
         category='Loan Request',
     )
@@ -340,7 +341,7 @@ async def cancel_loan(
 ):
     loan_db = await session.scalar(
         select(Loan)
-        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .options(selectinload(Loan.book), selectinload(Loan.created_by))
         .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
@@ -352,7 +353,7 @@ async def cancel_loan(
             status_code=400, detail='Only pending requests can be canceled.'
         )
 
-    if loan_db.user_id != current_user.id:
+    if loan_db.created_by_id != current_user.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='You are not allowed to cancel this loan.',
@@ -365,9 +366,7 @@ async def cancel_loan(
     await session.commit()
     await session.refresh(loan_db)
 
-    canceled_dt = loan_db.updated_at.replace(tzinfo=timezone.utc)
-
-    canceled_str = canceled_dt.astimezone(
+    canceled_str = loan_db.updated_at.astimezone(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
@@ -398,7 +397,7 @@ async def cancel_loan(
     background_tasks.add_task(
         email_service.send_email,
         email_to=[current_user.email],
-        subject='[Internhum] Confirmação de Cancelamento de Empréstimo',
+        subject='[Internum] Confirmação de Cancelamento de Empréstimo',
         html=html_content,
         category='Loan Cancel',
     )
@@ -448,15 +447,12 @@ async def approve_and_start_loan(
     await session.commit()
     await session.refresh(loan_db)
 
-    requested_dt = loan_db.borrowed_at.replace(tzinfo=timezone.utc)
-    due_dt = loan_db.due_date.replace(tzinfo=timezone.utc)
-
-    requested_str = requested_dt.astimezone(
+    requested_str = loan_db.borrowed_at.astimezone(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
-    due_date_str = due_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime(
-        '%d/%m/%Y'
-    )
+    due_date_str = loan_db.due_date.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y')
 
     html_content = f"""
     <html>
@@ -486,7 +482,7 @@ async def approve_and_start_loan(
     background_tasks.add_task(
         email_service.send_email,
         email_to=[current_user.email],
-        subject='[Internhum] Confirmação de Aprovação de Empréstimo',
+        subject='[Internum] Confirmação de Aprovação de Empréstimo',
         html=html_content,
         category='Loan Approve',
     )
@@ -507,7 +503,7 @@ async def return_loan(
 ):
     loan_db = await session.scalar(
         select(Loan)
-        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .options(selectinload(Loan.book), selectinload(Loan.created_by))
         .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
@@ -517,7 +513,7 @@ async def return_loan(
             detail=f'Loan with id ({loan_id}) not found.',
         )
 
-    if loan_db.user_id != current_user.id and current_user.role not in {
+    if loan_db.created_by_id != current_user.id and current_user.role not in {
         'admin',
         'coord',
     }:
@@ -536,9 +532,7 @@ async def return_loan(
     await session.commit()
     await session.refresh(loan_db)
 
-    returned_dt = loan_db.returned_at.replace(tzinfo=timezone.utc)
-
-    returned_str = returned_dt.astimezone(
+    returned_str = loan_db.returned_at.astimezone(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
@@ -569,7 +563,7 @@ async def return_loan(
     background_tasks.add_task(
         email_service.send_email,
         email_to=[current_user.email],
-        subject='[Internhum] Confirmação de Devolução de Empréstimo',
+        subject='[Internum] Confirmação de Devolução de Empréstimo',
         html=html_content,
         category='Loan Return',
     )
@@ -599,7 +593,7 @@ async def reject_loan(
 
     loan_db = await session.scalar(
         select(Loan)
-        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .options(selectinload(Loan.book), selectinload(Loan.created_by))
         .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
     )
 
@@ -619,11 +613,9 @@ async def reject_loan(
     await session.commit()
     await session.refresh(loan_db)
 
-    reject_dt = loan_db.updated_at.replace(tzinfo=timezone.utc)
-
-    reject_str = reject_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime(
-        '%d/%m/%Y %H:%M:%S'
-    )
+    reject_str = loan_db.updated_at.astimezone(
+        ZoneInfo('America/Sao_Paulo')
+    ).strftime('%d/%m/%Y %H:%M:%S')
 
     html_content = f"""
     <html>
@@ -655,7 +647,7 @@ async def reject_loan(
     background_tasks.add_task(
         email_service.send_email,
         email_to=[current_user.email],
-        subject='[Internhum] Informação de Rejeição de Empréstimo',
+        subject='[Internum] Informação de Rejeição de Empréstimo',
         html=html_content,
         category='Loan Reject',
     )
@@ -684,7 +676,7 @@ async def list_loans(
 
     stmt = select(Loan).options(
         selectinload(Loan.book),
-        selectinload(Loan.user),
+        selectinload(Loan.created_by),
         selectinload(Loan.approved_by),
     )
 
@@ -704,7 +696,7 @@ async def list_loans(
     if params.search:
         search_pattern = f'%{params.search}%'
         joins.append((Loan.book, Book))
-        joins.append((Loan.user, User))
+        joins.append((Loan.created_by, User))
 
         filters.append(
             or_(
@@ -767,10 +759,10 @@ async def list_my_loans(
 ):
     stmt = (
         select(Loan)
-        .where(Loan.user_id == current_user.id)
+        .where(Loan.created_by_id == current_user.id)
         .options(
             selectinload(Loan.book),
-            selectinload(Loan.user),
+            selectinload(Loan.created_by),
             selectinload(Loan.approved_by),
         )
     )
@@ -788,7 +780,7 @@ async def list_my_loans(
     count_stmt = (
         select(func.count())
         .select_from(Loan)
-        .where(Loan.user_id == current_user.id)
+        .where(Loan.created_by_id == current_user.id)
     )
     if params.status:
         count_stmt = count_stmt.where(Loan.status == status_enum)

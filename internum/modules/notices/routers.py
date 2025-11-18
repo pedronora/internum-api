@@ -361,6 +361,7 @@ async def deactivate_notice(
         )
 
     db_notice.active = False
+    db_notice.soft_delete(current_user.id)
 
     try:
         await session.commit()

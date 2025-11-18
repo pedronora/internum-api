@@ -32,7 +32,7 @@ def test_create_user(client, mock_db_time, token_admin):
     assert data['username'] == 'User_1'
     assert data['email'] == 'test@test.com'
     assert data['birthday'] == '2020-01-01'
-    assert data['created_at'] == time.isoformat()
+    assert data['created_at'] == time.isoformat() + 'Z'
 
 
 def test_create_user_without_permission(client, mock_db_time, token):

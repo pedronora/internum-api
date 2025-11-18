@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import Query
 from pydantic import BaseModel, Field, field_validator
 
-from internum.core.schemas import AuditSchema
 from internum.modules.library.enums import LoanStatus
 
 
@@ -24,11 +23,14 @@ class BookBriefSchema(BaseModel):
     model_config = dict(from_attributes=True)
 
 
-class LoanSchema(AuditSchema):
+class LoanSchema(BaseModel):
     id: int
     book: BookBriefSchema
-    user: UserBriefSchema
+    user: UserBriefSchema = Field(
+        ..., validation_alias='created_by', serialization_alias='user'
+    )
     status: LoanStatus = LoanStatus.REQUESTED
+    created_at: Optional[datetime] = None
     approved_by: Optional[UserBriefSchema]
     borrowed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -40,10 +42,12 @@ class LoanSchema(AuditSchema):
 class LoanBriefSchema(BaseModel):
     id: int
     book_id: int
-    user_id: int
+    user_id: int = Field(
+        ..., validation_alias='created_by_id', serialization_alias='user_id'
+    )
     status: LoanStatus
 
-    model_config = {'from_attributes': True}
+    model_config = dict(from_attributes=True)
 
 
 class LoanQueryParams(BaseModel):
@@ -84,7 +88,7 @@ class PaginatedLoansList(BaseModel):
     loans: list['LoanSchema']
 
 
-class BookBaseSchema(AuditSchema):
+class BookBaseSchema(BaseModel):
     id: int
     isbn: str
     title: str

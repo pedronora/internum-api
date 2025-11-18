@@ -74,7 +74,7 @@ class HomeService:
             select(Loan)
             .options(selectinload(Loan.book))
             .where(
-                (Loan.user_id == current_user_id)
+                (Loan.created_by_id == current_user_id)
                 & (Loan.status.in_([LoanStatus.BORROWED, LoanStatus.LATE]))
             )
         )

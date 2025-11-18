@@ -1,8 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy import DateTime, ForeignKey, Text
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from internum.core.models.mixins import AuditMixin
@@ -47,35 +47,36 @@ class Loan(AuditMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     book_id: Mapped[int] = mapped_column(ForeignKey('books.id'))
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+
     approved_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey('users.id'),
         default=None,
+    )
+    approved_by: Mapped[Optional['User']] = relationship(
+        'User', foreign_keys=[approved_by_id], lazy='joined', init=False
     )
 
     loan_period_days: Mapped[int] = mapped_column(default=14)
 
     borrowed_at: Mapped[Optional[datetime]] = mapped_column(
-        nullable=True, init=False
+        DateTime(timezone=True),
+        nullable=True,
+        init=False,
     )
     due_date: Mapped[Optional[datetime]] = mapped_column(
-        nullable=True, init=False
+        DateTime(timezone=True),
+        nullable=True,
+        init=False,
     )
     returned_at: Mapped[Optional[datetime]] = mapped_column(
-        nullable=True, init=False
+        DateTime(timezone=True),
+        nullable=True,
+        init=False,
     )
 
     status: Mapped[LoanStatus] = mapped_column(
         SqlEnum(LoanStatus),
         default=LoanStatus.REQUESTED,
-    )
-
-    user: Mapped['User'] = relationship(
-        'User', foreign_keys=[user_id], lazy='joined', init=False
-    )
-
-    approved_by: Mapped[Optional['User']] = relationship(
-        'User', foreign_keys=[approved_by_id], lazy='joined', init=False
     )
 
     book: Mapped['Book'] = relationship(back_populates='loans', init=False)
@@ -91,8 +92,8 @@ class Loan(AuditMixin):
             raise ValueError('Only requested loans can be started.')
         self.status = LoanStatus.BORROWED
         self.approved_by = approver
-        self.borrowed_at = datetime.utcnow()
-        self.due_date = datetime.utcnow() + timedelta(
+        self.borrowed_at = datetime.now(timezone.utc)
+        self.due_date = datetime.now(timezone.utc) + timedelta(
             days=self.loan_period_days
         )
 
@@ -106,7 +107,7 @@ class Loan(AuditMixin):
     def mark_as_returned(self):
         if self.status not in {LoanStatus.BORROWED, LoanStatus.LATE}:
             raise ValueError('Loan is not currently borrowed.')
-        self.returned_at = datetime.utcnow()
+        self.returned_at = datetime.now(timezone.utc)
         self.status = LoanStatus.RETURNED
         self.book.return_book()
 
@@ -114,7 +115,7 @@ class Loan(AuditMixin):
         if (
             self.status == LoanStatus.BORROWED
             and self.due_date.date()
-            and self.due_date.date() < datetime.utcnow().date()
+            and self.due_date.date() < datetime.now(timezone.utc).date()
         ):
             self.status = LoanStatus.LATE
             return True
