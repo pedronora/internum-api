@@ -19,6 +19,7 @@ async def create_admin(session: Session):
         name=settings.ADMIN_NAME,
         username=settings.ADMIN_USERNAME,
         email=settings.ADMIN_EMAIL,
+        birthday=settings.ADMIN_BIRTHDAY,
         password=get_password_hash(settings.ADMIN_PASSWORD),
         role=Role.ADMIN,
         setor=Setor.ADMINISTRATIVO,
@@ -27,6 +28,9 @@ async def create_admin(session: Session):
 
     session.add(admin)
     await session.commit()
+    await session.refresh(admin)
+
+    print(f'Usuário {admin.name} criado com sucesso!')
 
 
 if __name__ == '__main__':

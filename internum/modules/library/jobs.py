@@ -28,7 +28,7 @@ async def _mark_overdue_loans(session: AsyncSession):
     today = datetime.utcnow()
     result = await session.scalars(
         select(Loan)
-        .options(selectinload(Loan.book), selectinload(Loan.user))
+        .options(selectinload(Loan.book), selectinload(Loan.created_by))
         .where(
             Loan.status == LoanStatus.BORROWED,
             Loan.due_date < today,
@@ -69,7 +69,7 @@ def send_alert_late_loan(loan: Loan):
       <body
       style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
         <h2 style="color: #4CAF50;">Aviso de Empréstimo Atrasado</h2>
-        <p>Olá, {loan.user.name}:</p>
+        <p>Olá, {loan.created_by.name}:</p>
         <p>O empréstimo abaixo está atrasado:</p>
         <h3>Detalhes do Livro:</h3>
         <ul>
@@ -87,7 +87,7 @@ def send_alert_late_loan(loan: Loan):
     """
 
     email_service.send_email(
-        email_to=[loan.user.email],
+        email_to=[loan.created_by.email],
         subject='[Internhum] Aviso de Empréstimo Atrasado',
         html=html_content,
         category='Loan Late',

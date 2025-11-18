@@ -108,7 +108,11 @@ async def test_list_books_default(
     token,
 ):
     expected_books = 5
-    session.add_all(BookFactory.create_batch(5))
+    books_list = BookFactory.create_batch(expected_books)
+    for book in books_list:
+        book.created_by_id = user_admin.id
+
+    session.add_all(books_list)
     await session.commit()
 
     response = client.get(
@@ -122,12 +126,13 @@ async def test_list_books_default(
 
 
 @pytest.mark.asyncio
-async def test_list_books_with_search(client, session, token):
+async def test_list_books_with_search(client, session, user_admin, token):
     book_a = BookFactory(title='Python Tricks')
+    book_a.created_by_id = user_admin.id
     book_b = BookFactory(title='JavaScript Guide')
+    book_b.created_by_id = user_admin.id
 
-    session.add(book_a)
-    session.add(book_b)
+    session.add_all([book_a, book_b])
     await session.commit()
 
     response = client.get(
@@ -142,10 +147,12 @@ async def test_list_books_with_search(client, session, token):
 
 
 @pytest.mark.asyncio
-async def test_get_book_success(client, session, token):
+async def test_get_book_success(client, session, user_admin, token):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
+    await session.refresh(book)
 
     response = client.get(
         ENDPOINT_URL + f'/{book.id}',
@@ -197,6 +204,7 @@ def test_update_book_not_found(client, token_admin):
 @pytest.mark.asyncio
 async def test_soft_delete_success(client, session, token_admin, user_admin):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)

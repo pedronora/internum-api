@@ -1,8 +1,8 @@
-"""init: recreate schema from scratch
+"""init
 
-Revision ID: a82cf7715833
+Revision ID: f3852c2fbc83
 Revises: 
-Create Date: 2025-11-03 21:11:37.592571
+Create Date: 2025-11-17 14:55:48.643725
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a82cf7715833'
+revision: str = 'f3852c2fbc83'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,13 +26,14 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('username', sa.String(), nullable=False),
     sa.Column('password', sa.String(), nullable=False),
+    sa.Column('birthday', sa.Date(), nullable=False),
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('setor', sa.Enum('REGISTRO', 'ADMINISTRATIVO', 'OFICIAL', name='setor_enum'), nullable=False),
     sa.Column('subsetor', sa.String(), nullable=False),
     sa.Column('role', sa.Enum('ADMIN', 'COORD', 'USER', name='role_enum'), nullable=False),
     sa.Column('active', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('UTC', now())"), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('email'),
     sa.UniqueConstraint('username')
@@ -47,9 +48,9 @@ def upgrade() -> None:
     sa.Column('year', sa.Integer(), nullable=False),
     sa.Column('quantity', sa.Integer(), nullable=False),
     sa.Column('available_quantity', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('UTC', now())"), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_by_id', sa.Integer(), nullable=True),
     sa.Column('updated_by_id', sa.Integer(), nullable=True),
     sa.Column('deleted_by_id', sa.Integer(), nullable=True),
@@ -104,10 +105,10 @@ def upgrade() -> None:
     sa.Column('borrowed_at', sa.DateTime(), nullable=True),
     sa.Column('due_date', sa.DateTime(), nullable=True),
     sa.Column('returned_at', sa.DateTime(), nullable=True),
-    sa.Column('status', sa.Enum('REQUESTED', 'BORROWED', 'RETURNED', 'LATE', 'REJECTED', name='loanstatus'), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('status', sa.Enum('REQUESTED', 'BORROWED', 'RETURNED', 'LATE', 'REJECTED', 'CANCELED', name='loanstatus'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('UTC', now())"), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_by_id', sa.Integer(), nullable=True),
     sa.Column('updated_by_id', sa.Integer(), nullable=True),
     sa.Column('deleted_by_id', sa.Integer(), nullable=True),

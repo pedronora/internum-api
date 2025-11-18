@@ -58,6 +58,7 @@ class LegalBriefSchema(BaseModel):
 
     canceled: bool
     canceled_by: Optional[UserPublic] = None
+    canceled_at: Optional[datetime] = None
 
     revisions: list['LegalBriefRevisionSchema']
 

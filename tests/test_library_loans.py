@@ -26,11 +26,12 @@ class BookFactory(factory.Factory):
 
 @pytest.mark.asyncio
 async def test_loan_flow_success(
-    session, client, token, token_admin, user, mock_email_service
+    session, client, token, token_admin, user, user_admin, mock_email_service
 ):
     total_emails = 0
 
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -74,11 +75,12 @@ async def test_loan_flow_success(
 
 @pytest.mark.asyncio
 async def test_loan_flow_cancel_by_user(
-    session, client, token, user, mock_email_service
+    session, client, token, user, user_admin, mock_email_service
 ):
     total_emails = 0
 
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -105,11 +107,12 @@ async def test_loan_flow_cancel_by_user(
 
 @pytest.mark.asyncio
 async def test_loan_flow_reject_by_admin(
-    session, client, token, token_admin, user, mock_email_service
+    session, client, token, token_admin, user, user_admin, mock_email_service
 ):
     total_emails = 0
 
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -156,13 +159,17 @@ async def test_request_loan_unavailable_book(
 
 
 @pytest.mark.asyncio
-async def test_list_loans_admin_success(session, client, user, token_admin):
+async def test_list_loans_admin_success(
+    session, client, user, user_admin, token_admin
+):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan = Loan(book_id=book.id, user_id=user.id)
+    loan = Loan(book_id=book.id)
+    loan.created_by_id = user.id
     session.add(loan)
     await session.commit()
 
@@ -178,13 +185,15 @@ async def test_list_loans_admin_success(session, client, user, token_admin):
 
 
 @pytest.mark.asyncio
-async def test_list_my_loans_success(session, client, user, token):
+async def test_list_my_loans_success(session, client, user, user_admin, token):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan = Loan(book_id=book.id, user_id=user.id)
+    loan = Loan(book_id=book.id)
+    loan.created_by_id = user.id
     session.add(loan)
     await session.commit()
 
@@ -206,12 +215,9 @@ def _dt(days):
     return datetime.now(timezone.utc) + timedelta(days=days)
 
 
-@pytest.mark.asyncio
-async def test_check_overdue_updates_status():
-    loan = Loan(
-        book_id=1,
-        user_id=1,
-    )
+def test_check_overdue_updates_status(user_admin):
+    loan = Loan(book_id=1)
+    loan.created_by_id = user_admin.id
     loan.status = LoanStatus.BORROWED
     loan.borrowed_at = _dt(-10)
     loan.due_date = _dt(-2)
@@ -221,12 +227,9 @@ async def test_check_overdue_updates_status():
     assert loan.status == LoanStatus.LATE
 
 
-@pytest.mark.asyncio
-async def test_check_overdue_ignores_not_due():
-    loan = Loan(
-        book_id=1,
-        user_id=1,
-    )
+def test_check_overdue_ignores_not_due(user_admin):
+    loan = Loan(book_id=1)
+    loan.created_by_id = user_admin.id
     loan.status = LoanStatus.BORROWED
     loan.borrowed_at = _dt(-2)
     loan.due_date = _dt(+5)
@@ -236,8 +239,7 @@ async def test_check_overdue_ignores_not_due():
     assert loan.status == LoanStatus.BORROWED
 
 
-@pytest.mark.asyncio
-async def test_check_overdue_ignores_non_borrowed():
+def test_check_overdue_ignores_non_borrowed(user_admin):
     for invalid in [
         LoanStatus.REQUESTED,
         LoanStatus.REJECTED,
@@ -245,7 +247,8 @@ async def test_check_overdue_ignores_non_borrowed():
         LoanStatus.RETURNED,
         LoanStatus.LATE,
     ]:
-        loan = Loan(book_id=1, user_id=1, status=invalid)
+        loan = Loan(book_id=1, status=invalid)
+        loan.created_by_id = user_admin.id
 
         loan.check_overdue()
 
@@ -254,12 +257,9 @@ async def test_check_overdue_ignores_non_borrowed():
 
 
 @pytest.mark.asyncio
-async def test_user_cannot_approve(
-    session,
-    client,
-    token,
-):
+async def test_user_cannot_approve(session, client, token, user_admin):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -280,8 +280,9 @@ async def test_user_cannot_approve(
 
 
 @pytest.mark.asyncio
-async def test_user_cannot_reject(session, client, token):
+async def test_user_cannot_reject(session, client, token, user_admin):
     book = BookFactory()
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -301,8 +302,7 @@ async def test_user_cannot_reject(session, client, token):
     assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
-@pytest.mark.asyncio
-async def test_user_cannot_list_all(session, client, token):
+def test_user_cannot_list_all(session, client, token):
     resp = client.get(
         ENDPOINT_URL,
         headers={'Authorization': f'Bearer {token}'},
@@ -316,7 +316,9 @@ async def test_user_cannot_list_all(session, client, token):
 
 
 @pytest.mark.asyncio
-async def test_list_loans_filter_by_status(session, client, token_admin, user):
+async def test_list_loans_filter_by_status(
+    session, client, token_admin, user, user_admin
+):
     # Cria livro
     book = Book(
         isbn='111',
@@ -326,14 +328,17 @@ async def test_list_loans_filter_by_status(session, client, token_admin, user):
         edition=1,
         year=2024,
     )
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan1 = Loan(book_id=book.id, user_id=user.id, status=LoanStatus.BORROWED)
+    loan1 = Loan(book_id=book.id, status=LoanStatus.BORROWED)
+    loan1.created_by_id = user.id
     session.add(loan1)
 
-    loan2 = Loan(book_id=book.id, user_id=user.id, status=LoanStatus.REQUESTED)
+    loan2 = Loan(book_id=book.id, status=LoanStatus.REQUESTED)
+    loan2.created_by_id = user.id
     session.add(loan2)
 
     await session.commit()
@@ -363,7 +368,7 @@ async def test_list_loans_invalid_status_returns_400(client, token_admin):
 
 @pytest.mark.asyncio
 async def test_list_loans_search_filters_results(
-    session, client, token_admin, user
+    session, client, token_admin, user, user_admin
 ):
     book1 = Book(
         isbn='123-ABC',
@@ -386,14 +391,16 @@ async def test_list_loans_search_filters_results(
         quantity=1,
         available_quantity=0,
     )
+    book1.created_by_id = book2.created_by_id = user_admin.id
 
     session.add_all([book1, book2])
     await session.commit()
     await session.refresh(book1)
     await session.refresh(book2)
 
-    loan1 = Loan(book_id=book1.id, user_id=user.id, status=LoanStatus.BORROWED)
-    loan2 = Loan(book_id=book2.id, user_id=user.id, status=LoanStatus.BORROWED)
+    loan1 = Loan(book_id=book1.id, status=LoanStatus.BORROWED)
+    loan2 = Loan(book_id=book2.id, status=LoanStatus.BORROWED)
+    loan1.created_by_id = loan2.created_by_id = user.id
     session.add_all([loan1, loan2])
     await session.commit()
 
@@ -411,7 +418,7 @@ async def test_list_loans_search_filters_results(
 
 @pytest.mark.asyncio
 async def test_list_loans_search_matches_user_name(
-    session, client, token_admin, user
+    session, client, token_admin, user, user_admin
 ):
     book = Book(
         isbn='333',
@@ -423,11 +430,13 @@ async def test_list_loans_search_matches_user_name(
         quantity=1,
         available_quantity=0,
     )
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan = Loan(book_id=book.id, user_id=user.id, status=LoanStatus.BORROWED)
+    loan = Loan(book_id=book.id, status=LoanStatus.BORROWED)
+    loan.created_by_id = user.id
     session.add(loan)
     await session.commit()
 
@@ -483,7 +492,7 @@ async def test_return_loan_not_found(client, token):
 
 @pytest.mark.asyncio
 async def test_return_loan_forbidden_for_other_user(
-    session, client, user, token, other_user
+    session, client, user, token, other_user, user_admin
 ):
     book = Book(
         isbn='222',
@@ -493,13 +502,13 @@ async def test_return_loan_forbidden_for_other_user(
         edition=1,
         year=2020,
     )
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan = Loan(
-        book_id=book.id, user_id=other_user.id, status=LoanStatus.BORROWED
-    )
+    loan = Loan(book_id=book.id, status=LoanStatus.BORROWED)
+    loan.created_by_id = other_user.id
     session.add(loan)
     await session.commit()
     await session.refresh(loan)
@@ -515,7 +524,7 @@ async def test_return_loan_forbidden_for_other_user(
 
 @pytest.mark.asyncio
 async def test_return_loan_mark_as_returned_raises_400(
-    session, client, user, token
+    session, client, user, user_admin, token
 ):
     book = Book(
         isbn='333',
@@ -527,11 +536,13 @@ async def test_return_loan_mark_as_returned_raises_400(
         quantity=1,
         available_quantity=0,
     )
+    book.created_by_id = user_admin.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
-    loan = Loan(book_id=book.id, user_id=user.id, status=LoanStatus.BORROWED)
+    loan = Loan(book_id=book.id, status=LoanStatus.BORROWED)
+    loan.created_by_id = user.id
     session.add(loan)
     await session.commit()
     await session.refresh(loan)
@@ -549,7 +560,9 @@ async def test_return_loan_mark_as_returned_raises_400(
 
 
 @pytest.mark.asyncio
-async def test_list_loans_pagination(session, client, token_admin, user):
+async def test_list_loans_pagination(
+    session, client, token_admin, user, user_admin
+):
     LIMIT = 2
     books = []
     for i in range(3):
@@ -563,13 +576,20 @@ async def test_list_loans_pagination(session, client, token_admin, user):
             quantity=1,
             available_quantity=0,
         )
+        b.created_by_id = user_admin.id
         books.append(b)
     session.add_all(books)
     await session.commit()
     for b in books:
         await session.refresh(b)
 
-    loans = [Loan(book_id=books[i].id, user_id=user.id) for i in range(3)]
+    loans = []
+
+    for book in books:
+        loan = Loan(book_id=book.id)
+        loan.created_by_id = user.id
+        loans.append(loan)
+
     session.add_all(loans)
     await session.commit()
 

@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import (
 
 from internum.core.settings import Settings
 
-engine = create_async_engine(Settings().DATABASE_URL)
+engine = create_async_engine(
+    Settings().DATABASE_URL, connect_args={'options': '-c timezone=UTC'}
+)
 
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
