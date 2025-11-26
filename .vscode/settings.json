@@ -1,5 +1,5 @@
 {
-    "editor.fontFamily": "'Firacode Nerd Font Mono', 'monospace', monospace",
+    "editor.fontFamily": "'Firacode Nerd Font Mono', 'MesloLGS NF', 'monospace', monospace",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true

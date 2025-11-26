@@ -1,9 +1,94 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
+from internum.modules.auth.jobs import (
+    _delete_expired_or_used_reset_tokens,  # noqa: PLC2701
+)
+from internum.modules.auth.models import PasswordResetToken
 from internum.modules.library.jobs import _mark_overdue_loans  # noqa: PLC2701
 from internum.modules.library.models import Book, Loan, LoanStatus
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_or_used_tokens(session, user):
+    expired_token = PasswordResetToken(
+        user_id=user.id,
+        token='expired_token',
+        expires_at=datetime.now(UTC) - timedelta(days=1),
+        used=False,
+    )
+
+    used_token = PasswordResetToken(
+        user_id=user.id,
+        token='used_token',
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+        used=True,
+    )
+
+    valid_token = PasswordResetToken(
+        user_id=user.id,
+        token='valid_token',
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+        used=False,
+    )
+
+    session.add_all([expired_token, used_token, valid_token])
+    await session.commit()
+
+    await _delete_expired_or_used_reset_tokens(session)
+
+    remaining_tokens = await session.scalars(select(PasswordResetToken))
+    remaining_tokens_list = remaining_tokens.all()
+
+    assert len(remaining_tokens_list) == 1
+    assert remaining_tokens_list[0].token == 'valid_token'
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_or_used_tokens_no_tokens_to_delete(session):
+    await _delete_expired_or_used_reset_tokens(session)
+
+    remaining_tokens = await session.scalars(select(PasswordResetToken))
+    assert len(remaining_tokens.all()) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_or_used_tokens_only_expired(session, user):
+    expired_token = PasswordResetToken(
+        user_id=user.id,
+        token='expired_only',
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
+        used=False,
+    )
+
+    session.add(expired_token)
+    await session.commit()
+
+    await _delete_expired_or_used_reset_tokens(session)
+
+    remaining_tokens = await session.scalars(select(PasswordResetToken))
+    assert len(remaining_tokens.all()) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_or_used_tokens_only_used(session, user):
+    """Testa deleção apenas de tokens usados (não expirados)"""
+    used_token = PasswordResetToken(
+        user_id=user.id,
+        token='used_only',
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+        used=True,
+    )
+
+    session.add(used_token)
+    await session.commit()
+
+    await _delete_expired_or_used_reset_tokens(session)
+
+    remaining_tokens = await session.scalars(select(PasswordResetToken))
+    assert len(remaining_tokens.all()) == 0
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from internum.api.main import router as main_router
 from internum.core.scheduler.scheduler import scheduler, start_scheduler
+from internum.core.settings import Settings
+
+settings = Settings()
 
 
 @asynccontextmanager
@@ -18,7 +21,7 @@ app = FastAPI(title='Internum API - 1 RI Cascavel', lifespan=lifespan)
 
 
 origins = [
-    'http://localhost:5173',
+    settings.FRONTEND_URL,
 ]
 
 app.add_middleware(

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -287,8 +287,7 @@ async def request_loan(
     await session.commit()
     await session.refresh(new_loan)
 
-    requested_dt = new_loan.created_at.replace(tzinfo=timezone.utc)
-    requested_str = requested_dt.astimezone(
+    requested_str = new_loan.created_at.astimezone(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
@@ -428,7 +427,7 @@ async def approve_and_start_loan(
     loan_db = await session.scalar(
         select(Loan)
         .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
-        .options(selectinload(Loan.book))
+        .options(selectinload(Loan.book), selectinload(Loan.created_by))
     )
 
     if not loan_db:
@@ -481,7 +480,7 @@ async def approve_and_start_loan(
 
     background_tasks.add_task(
         email_service.send_email,
-        email_to=[current_user.email],
+        email_to=[loan_db.created_by.email],
         subject='[Internum] Confirmação de Aprovação de Empréstimo',
         html=html_content,
         category='Loan Approve',

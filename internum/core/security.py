@@ -5,7 +5,13 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from jwt import DecodeError, ExpiredSignatureError, decode, encode
+from jwt import (
+    DecodeError,
+    ExpiredSignatureError,
+    InvalidTokenError,
+    decode,
+    encode,
+)
 from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,22 +31,31 @@ def _now_utc() -> datetime:
     return datetime.now(tz=ZoneInfo('UTC'))
 
 
-def create_access_token(data: dict):
+def create_access_token(
+    data: dict,
+    expire_minutes: int = settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    purpose: str | None = None,
+):
     to_encode = data.copy()
-    expire = _now_utc() + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    expire = _now_utc() + timedelta(minutes=expire_minutes)
     to_encode.update({'exp': expire})
+
+    if purpose:
+        to_encode['purpose'] = purpose
+
     encoded_jwt = encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
+
     return encoded_jwt
 
 
-def create_refresh_token(data: dict):
+def create_refresh_token(
+    data: dict, expire_minutes: int = settings.REFRESH_TOKEN_EXPIRE_DAYS
+):
     to_encode = data.copy()
     jti = uuid.uuid4().hex
-    expire = _now_utc() + timedelta(settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = _now_utc() + timedelta(expire_minutes)
 
     to_encode.update({'exp': expire, 'jti': jti, 'type': 'refresh'})
     encoded_jwt = encode(
@@ -57,19 +72,25 @@ def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def decode_token(token: str):
+def decode_token(token: str, expected_purpose: str | None = None):
     try:
         payload = decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+
+        if expected_purpose is not None:
+            token_purpose = payload.get('purpose')
+            if token_purpose != expected_purpose:
+                raise InvalidTokenError('Propósito do token inválido.')
+
         return payload
     except ExpiredSignatureError:
         raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED, detail='Token expirado'
+            status_code=HTTPStatus.UNAUTHORIZED, detail='Token expirado.'
         )
     except DecodeError:
         raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED, detail='Token inválido'
+            status_code=HTTPStatus.UNAUTHORIZED, detail='Token inválido.'
         )
 
 
