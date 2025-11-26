@@ -1,5 +1,5 @@
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Annotated
 
@@ -212,7 +212,7 @@ async def update_legal_brief(
         current_brief.title = data.title or current_brief.title
         current_brief.content = data.content or current_brief.content
         current_brief.updated_by_id = current_user.id
-        current_brief.updated_at = datetime.utcnow()
+        current_brief.updated_at = datetime.now(UTC)
         session.add(current_brief)
 
         await session.commit()
@@ -265,6 +265,7 @@ async def cancel_legal_brief(
 
     db_legal_brief.canceled = True
     db_legal_brief.canceled_by = current_user
+    db_legal_brief.canceled_at = datetime.now(UTC)
 
     await session.commit()
     await session.refresh(db_legal_brief)
