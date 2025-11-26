@@ -31,6 +31,7 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           ALGORITHM: ${{ secrets.ALGORITHM }}
           ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
           POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
           POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -41,6 +42,7 @@ jobs:
           REFRESH_COOKIE_PATH: ${{ secrets.REFRESH_COOKIE_PATH }}
           REFRESH_TOKEN_EXPIRE_DAYS: ${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
           REFRESH_COOKIE_MAX_AGE: ${{ secrets.REFRESH_COOKIE_MAX_AGE }}
+          RESET_TOKEN_EXPIRE_MINUTES: ${{ secrets.RESET_TOKEN_EXPIRE_MINUTES }}
           SECURE_COOKIE: ${{ secrets.SECURE_COOKIE }}
           REFRESH_COOKIE_SAMESITE: ${{ secrets.REFRESH_COOKIE_SAMESITE }}
           ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
