@@ -13,7 +13,7 @@ from testcontainers.postgres import PostgresContainer
 from internum.app import app
 from internum.core.database import get_session
 from internum.core.models.registry import table_registry
-from internum.core.security import get_password_hash
+from internum.core.security import create_access_token, get_password_hash
 from internum.modules.users.enums import Role, Setor
 from internum.modules.users.models import User
 
@@ -93,6 +93,18 @@ def token_inactive(client, user_inactive):
         },
     )
     return response.json()['access_token']
+
+
+@pytest.fixture
+def token_factory():
+    def _create(user_id, purpose='password_reset', expire_minutes=5):
+        return create_access_token(
+            data={'sub': str(user_id)},
+            expire_minutes=expire_minutes,
+            purpose=purpose,
+        )
+
+    return _create
 
 
 @pytest.fixture
