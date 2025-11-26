@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
+    FRONTEND_URL: str
     POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_USER: str
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     REFRESH_COOKIE_PATH: str
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REFRESH_COOKIE_MAX_AGE: int
+    RESET_TOKEN_EXPIRE_MINUTES: int
     SECURE_COOKIE: bool
     REFRESH_COOKIE_SAMESITE: str
     ADMIN_NAME: str
