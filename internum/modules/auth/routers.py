@@ -289,6 +289,13 @@ async def reset_password(data: ResetPasswordRequest, session: Session):
             detail='Token inválido.',
         )
 
+    if db_token.used:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Este link de redefinição já foi utilizado. '
+            'Solicite um novo.',
+        )
+
     db_user = await session.scalar(select(User).where(User.id == int(user_id)))
 
     if not db_user:

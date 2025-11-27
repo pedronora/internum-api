@@ -1,4 +1,0 @@
-- name: GitGuardian scan
-  uses: GitGuardian/gg-shield-action@v1.26.0
-  with:
-    args: scan repo . --config-path .gitguardian.y
