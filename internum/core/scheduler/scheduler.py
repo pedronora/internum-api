@@ -21,7 +21,7 @@ def start_scheduler():
 
     scheduler.add_job(
         delete_expired_or_used_reset_tokens,
-        CronTrigger(hour=13, minute=47, timezone=timezone_sp),
+        CronTrigger(hour=00, minute=00, timezone=timezone_sp),
         id='delete_expired_tokens',
         name='Deletar tokens expirados',
     )
