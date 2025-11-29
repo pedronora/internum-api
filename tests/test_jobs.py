@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from internum.modules.auth.jobs import (
-    _delete_expired_or_used_reset_tokens,  # noqa: PLC2701
+    _delete_expired_reset_tokens,  # noqa: PLC2701
 )
 from internum.modules.auth.models import PasswordResetToken
 from internum.modules.library.jobs import _mark_overdue_loans  # noqa: PLC2701
@@ -12,7 +12,9 @@ from internum.modules.library.models import Book, Loan, LoanStatus
 
 
 @pytest.mark.asyncio
-async def test_delete_expired_or_used_tokens(session, user):
+async def test_delete_expired_tokens(session, user):
+    expected_remain_tokens = 2
+
     expired_token = PasswordResetToken(
         user_id=user.id,
         token='expired_token',
@@ -37,25 +39,25 @@ async def test_delete_expired_or_used_tokens(session, user):
     session.add_all([expired_token, used_token, valid_token])
     await session.commit()
 
-    await _delete_expired_or_used_reset_tokens(session)
+    await _delete_expired_reset_tokens(session)
 
     remaining_tokens = await session.scalars(select(PasswordResetToken))
     remaining_tokens_list = remaining_tokens.all()
 
-    assert len(remaining_tokens_list) == 1
-    assert remaining_tokens_list[0].token == 'valid_token'
+    assert len(remaining_tokens_list) == expected_remain_tokens
+    assert remaining_tokens_list[0].token in {'valid_token', 'used_token'}
 
 
 @pytest.mark.asyncio
-async def test_delete_expired_or_used_tokens_no_tokens_to_delete(session):
-    await _delete_expired_or_used_reset_tokens(session)
+async def test_delete_expired_tokens_no_tokens_to_delete(session):
+    await _delete_expired_reset_tokens(session)
 
     remaining_tokens = await session.scalars(select(PasswordResetToken))
     assert len(remaining_tokens.all()) == 0
 
 
 @pytest.mark.asyncio
-async def test_delete_expired_or_used_tokens_only_expired(session, user):
+async def test_delete_expired_tokens_only_expired(session, user):
     expired_token = PasswordResetToken(
         user_id=user.id,
         token='expired_only',
@@ -66,15 +68,14 @@ async def test_delete_expired_or_used_tokens_only_expired(session, user):
     session.add(expired_token)
     await session.commit()
 
-    await _delete_expired_or_used_reset_tokens(session)
+    await _delete_expired_reset_tokens(session)
 
     remaining_tokens = await session.scalars(select(PasswordResetToken))
     assert len(remaining_tokens.all()) == 0
 
 
 @pytest.mark.asyncio
-async def test_delete_expired_or_used_tokens_only_used(session, user):
-    """Testa deleção apenas de tokens usados (não expirados)"""
+async def test_delete_expired_tokens_only_used(session, user):
     used_token = PasswordResetToken(
         user_id=user.id,
         token='used_only',
@@ -85,10 +86,10 @@ async def test_delete_expired_or_used_tokens_only_used(session, user):
     session.add(used_token)
     await session.commit()
 
-    await _delete_expired_or_used_reset_tokens(session)
+    await _delete_expired_reset_tokens(session)
 
     remaining_tokens = await session.scalars(select(PasswordResetToken))
-    assert len(remaining_tokens.all()) == 0
+    assert len(remaining_tokens.all()) == 1
 
 
 @pytest.mark.asyncio

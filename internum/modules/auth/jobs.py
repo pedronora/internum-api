@@ -1,13 +1,13 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, or_
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import async_session_maker
 from internum.modules.auth.models import PasswordResetToken
 
 
-async def _delete_expired_or_used_reset_tokens(session: AsyncSession):
+async def _delete_expired_reset_tokens(session: AsyncSession):
     print(
         '[Scheduler] Verificando tokens usados ou vencidos '
         f'às {datetime.now(UTC)}'
@@ -15,9 +15,7 @@ async def _delete_expired_or_used_reset_tokens(session: AsyncSession):
 
     today = datetime.now(UTC)
     result = await session.execute(
-        delete(PasswordResetToken).where(
-            or_(PasswordResetToken.used, PasswordResetToken.expires_at < today)
-        )
+        delete(PasswordResetToken).where(PasswordResetToken.expires_at < today)
     )
 
     deleted_count = result.rowcount
@@ -25,10 +23,10 @@ async def _delete_expired_or_used_reset_tokens(session: AsyncSession):
     await session.commit()
 
 
-async def delete_expired_or_used_reset_tokens():
+async def delete_expired_reset_tokens():
     async with async_session_maker() as session:
         try:
-            await _delete_expired_or_used_reset_tokens(session)
+            await _delete_expired_reset_tokens(session)
         except Exception as e:
             print(f'[Scheduler] Erro ao deletar tokens: {e}')
             await session.rollback()
