@@ -173,9 +173,7 @@ async def forgot_password(
     await session.commit()
 
     reset_link = (
-        settings.FRONTEND_URL
-        + '/api/v1/auth/reset-password?token='
-        + reset_token
+        settings.FRONTEND_URL + '/auth/reset-password?token=' + reset_token
     )
 
     requested = (
