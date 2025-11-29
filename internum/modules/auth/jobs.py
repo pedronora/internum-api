@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, or_
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import async_session_maker
@@ -15,9 +15,7 @@ async def _delete_expired_or_used_reset_tokens(session: AsyncSession):
 
     today = datetime.now(UTC)
     result = await session.execute(
-        delete(PasswordResetToken).where(
-            or_(PasswordResetToken.used, PasswordResetToken.expires_at < today)
-        )
+        delete(PasswordResetToken).where(PasswordResetToken.expires_at < today)
     )
 
     deleted_count = result.rowcount
