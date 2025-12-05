@@ -194,7 +194,7 @@ poetry run task run
 A API estará em:
 👉 http://localhost:8000
 
-## 👉 Documentação automática: `/docs` ou `/redoc`
+👉 Documentação automática: `/docs` ou `/redoc`
 
 ## 🧪 Testes
 
