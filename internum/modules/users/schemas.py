@@ -38,6 +38,7 @@ class UserBase(BaseModel):
     username: str
     email: EmailStr
     birthday: date
+    hiring_date: date
     setor: Setor
     subsetor: str
     role: Role = Role.USER
