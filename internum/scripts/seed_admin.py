@@ -19,11 +19,13 @@ async def create_admin(session: Session):
         name=settings.ADMIN_NAME,
         username=settings.ADMIN_USERNAME,
         email=settings.ADMIN_EMAIL,
+        cpf=settings.ADMIN_CPF,
         birthday=settings.ADMIN_BIRTHDAY,
         password=get_password_hash(settings.ADMIN_PASSWORD),
         role=Role.ADMIN,
         setor=Setor.ADMINISTRATIVO,
         subsetor='Apoio',
+        hiring_date=settings.ADMIN_BIRTHDAY,
     )
 
     session.add(admin)

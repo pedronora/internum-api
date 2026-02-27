@@ -17,6 +17,37 @@ from internum.core.security import create_access_token, get_password_hash
 from internum.modules.users.enums import Role, Setor
 from internum.modules.users.models import User
 
+CPF_LENGTH = 11
+CPF_BASE_LENGTH = 9
+CPF_FIRST_WEIGHT = 10
+CPF_SECOND_WEIGHT = 11
+CPF_DIGIT_LIMIT = 10
+
+
+def generate_valid_cpf(seed: int) -> str:
+    base = f'{seed:0{CPF_BASE_LENGTH}d}'
+
+    first_sum = sum(
+        int(base[i]) * (CPF_FIRST_WEIGHT - i)
+        for i in range(CPF_BASE_LENGTH)
+    )
+    first_digit = (first_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
+    first_digit = (
+        0 if first_digit == CPF_DIGIT_LIMIT else first_digit
+    )
+
+    base_with_first = base + str(first_digit)
+    second_sum = sum(
+        int(base_with_first[i]) * (CPF_SECOND_WEIGHT - i)
+        for i in range(CPF_FIRST_WEIGHT)
+    )
+    second_digit = (second_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
+    second_digit = (
+        0 if second_digit == CPF_DIGIT_LIMIT else second_digit
+    )
+
+    return base_with_first + str(second_digit)
+
 
 class UserFactory(factory.Factory):
     class Meta:
@@ -24,6 +55,7 @@ class UserFactory(factory.Factory):
 
     name = factory.Sequence(lambda n: f'User_{n}')
     username = factory.LazyAttribute(lambda obj: obj.name.lower())
+    cpf = factory.Sequence(lambda n: generate_valid_cpf(n + 1))
     password = factory.Faker(
         'password',
         length=15,

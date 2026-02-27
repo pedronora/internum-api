@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, func
+from sqlalchemy import Boolean, Date, DateTime, String, func
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +20,7 @@ class User:
     name: Mapped[str]
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
+    cpf: Mapped[str] = mapped_column(String(11), nullable=False)
     birthday: Mapped[date] = mapped_column(Date)
     email: Mapped[str] = mapped_column(unique=True)
     setor: Mapped[Setor] = mapped_column(
