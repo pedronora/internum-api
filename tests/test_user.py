@@ -337,7 +337,9 @@ def test_update_user_all_fields(client, user, token_admin):
     assert not data['active']
 
 
-def test_update_user_reject_termination_date_when_active(client, user, token_admin):
+def test_update_user_reject_termination_date_when_active(
+    client, user, token_admin
+):
     update_data = {
         'active': True,
         'termination_date': '2026-02-01',
