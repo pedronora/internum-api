@@ -38,6 +38,11 @@ class UserFactory(factory.Factory):
         date_start=date(1970, 1, 1),
         date_end=date(2005, 12, 31),
     )
+    hiring_date = factory.Faker(
+        'date_between_dates',
+        date_start=date(2023, 1, 18),
+        date_end=date(2026, 2, 5),
+    )
     role = Role.USER
     setor = Setor.REGISTRO
     subsetor = 'Análise'

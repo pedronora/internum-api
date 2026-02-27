@@ -125,6 +125,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.development
 .venv
 env/
 venv/
@@ -177,4 +178,6 @@ pyrightconfig.json
 
 # Generated using ignr.py - github.com/Antrikshy/ignr.py
 
-.env.development
+# Scripts
+*/scripts/*
+!*/scripts/seed_admin.py

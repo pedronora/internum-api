@@ -33,6 +33,7 @@ from internum.modules.auth.schemas import (
     ResetPasswordRequest,
     Token,
 )
+from internum.modules.auth.templates import password_reset_template
 from internum.modules.users.models import User
 
 router = APIRouter(prefix='/auth', tags=['Auth'])
@@ -182,61 +183,14 @@ async def forgot_password(
         .strftime('%d/%m/%Y %H:%M:%S')
     )
 
-    html_content = f"""
-<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;padding:40px 0;">
-  <tr>
-    <td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:white;border-radius:8px;padding:32px;font-family:Arial,Helvetica,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
-
-        <tr>
-          <td style="font-size:20px;font-weight:bold;color:#0d6efd;padding-bottom:12px;text-align:center;">
-            Recuperação de Senha
-          </td>
-        </tr>
-
-        <tr>
-          <td style="font-size:15px;color:#333;padding-bottom:20px;line-height:1.5;">
-            Você solicitou a redefinição de senha da sua conta no <strong>Internum</strong>. 
-            Clique no botão abaixo para criar uma nova senha.
-          </td>
-        </tr>
-
-        <tr>
-          <td align="center" style="padding-bottom:28px;">
-            <a href="{reset_link}"
-               style="
-                  background-color:#0d6efd;
-                  color:white;
-                  text-decoration:none;
-                  padding:12px 22px;
-                  border-radius:6px;
-                  font-size:15px;
-                  font-weight:bold;
-                  display:inline-block;
-               ">
-              Redefinir Senha
-            </a>
-          </td>
-        </tr>
-
-        <tr>
-          <td style="font-size:14px;color:#555;line-height:1.5;padding-bottom:20px;">
-            Por segurança, este link expira em <strong>{settings.RESET_TOKEN_EXPIRE_MINUTES} minutos</strong> após a requisição realizada em {requested}.<br>
-            Caso você não tenha solicitado essa alteração, basta ignorar este e-mail.
-          </td>
-        </tr>
-
-        <tr>
-          <td style="font-size:12px;color:#999;text-align:center;padding-top:10px;">
-            Internum — 1º SRI de Cascavel/PR
-          </td>
-        </tr>
-
-      </table>
-    </td>
-  </tr>
-</table>
-"""  # noqa: E501, W291
+    html_content = password_reset_template(
+        payload={
+            'user_name': user.name,
+            'reset_link': reset_link,
+            'requested_at': requested,
+            'expire_minutes': settings.RESET_TOKEN_EXPIRE_MINUTES,
+        }
+    )
 
     background_tasks.add_task(
         email_service.send_email,

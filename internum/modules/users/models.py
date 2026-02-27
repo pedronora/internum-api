@@ -20,12 +20,17 @@ class User:
     name: Mapped[str]
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
-    birthday: Mapped[date | None] = mapped_column(Date, nullable=False)
+    birthday: Mapped[date] = mapped_column(Date)
     email: Mapped[str] = mapped_column(unique=True)
     setor: Mapped[Setor] = mapped_column(
         SqlEnum(Setor, name='setor_enum'), nullable=False
     )
     subsetor: Mapped[str] = mapped_column(nullable=False)
+
+    hiring_date: Mapped[date] = mapped_column(Date, nullable=False)
+    termination_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, init=False
+    )
 
     role: Mapped[Role] = mapped_column(
         SqlEnum(Role, name='role_enum'), default=Role.USER, nullable=False
@@ -45,3 +50,7 @@ class User:
         nullable=True,
         init=False,
     )
+
+    def terminate(self, date: date):
+        self.termination_date = date
+        self.active = False
