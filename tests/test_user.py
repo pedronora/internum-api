@@ -158,6 +158,28 @@ def test_create_user_with_existent_email(client, user, token_admin):
     assert response.json()['detail'] == 'Email já existente.'
 
 
+def test_create_user_with_existent_cpf(client, user, token_admin):
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': user.name,
+            'username': 'new_username',
+            'password': user.clean_password,
+            'cpf': user.cpf,
+            'email': 'other@mail.com',
+            'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
+            'setor': user.setor,
+            'subsetor': user.subsetor,
+            'role': user.role,
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json()['detail'] == 'CPF já existente.'
+
+
 def test_get_users(client, token_admin):
     response = client.get(
         ENDPOINT_URL, headers={'Authorization': f'Bearer {token_admin}'}
@@ -187,6 +209,7 @@ def test_get_user(client, user, token):
     assert response.status_code == HTTPStatus.OK
 
     assert response.json() == expected_data
+    assert 'termination_date' in response.json()
 
 
 def test_get_user_by_id_not_found(client, token_admin):
@@ -284,7 +307,10 @@ def test_update_user_all_fields(client, user, token_admin):
     update_data = {
         'name': 'Nome Completo',
         'username': 'novousername',
+        'cpf': '529.982.247-25',
         'email': 'novo@email.com',
+        'hiring_date': '2026-01-01',
+        'termination_date': '2026-02-01',
         'setor': 'administrativo',
         'subsetor': 'Desenvolvimento',
         'role': 'admin',
@@ -301,11 +327,29 @@ def test_update_user_all_fields(client, user, token_admin):
     data = response.json()
     assert data['name'] == 'Nome Completo'
     assert data['username'] == 'novousername'
+    assert data['cpf'] == '52998224725'
     assert data['email'] == 'novo@email.com'
+    assert data['hiring_date'] == '2026-01-01'
+    assert data['termination_date'] == '2026-02-01'
     assert data['setor'] == 'administrativo'
     assert data['subsetor'] == 'Desenvolvimento'
     assert data['role'] == 'admin'
     assert not data['active']
+
+
+def test_update_user_reject_termination_date_when_active(client, user, token_admin):
+    update_data = {
+        'active': True,
+        'termination_date': '2026-02-01',
+    }
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_update_role_without_permissions(client, user, token):
@@ -407,6 +451,21 @@ def test_update_user_duplicate_email(client, session, user, other_user, token):
     assert response.status_code == HTTPStatus.CONFLICT
     assert (
         'Email' in response.json()['detail']
+        or 'existem' in response.json()['detail']
+    )
+
+
+def test_update_user_duplicate_cpf(client, user, other_user, token):
+    update_data = {'cpf': other_user.cpf}
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert (
+        'CPF' in response.json()['detail']
         or 'existem' in response.json()['detail']
     )
 
