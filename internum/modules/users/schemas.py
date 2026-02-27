@@ -15,6 +15,47 @@ from internum.modules.users.enums import Role, Setor
 
 MIN_LENGTH_PWD = 8
 MAX_LENGTH_PWD = 64
+CPF_LENGTH = 11
+CPF_FIRST_WEIGHT = 10
+CPF_SECOND_WEIGHT = 11
+CPF_DIGIT_LIMIT = 10
+CPF_BASE_LENGTH = 9
+
+
+def validate_cpf(cpf: str) -> str:
+    digits = ''.join(char for char in cpf if char.isdigit())
+
+    if len(digits) != CPF_LENGTH:
+        raise ValueError('CPF deve conter 11 dígitos.')
+
+    if digits == digits[0] * CPF_LENGTH:
+        raise ValueError('CPF inválido.')
+
+    first_sum = sum(
+        int(digits[i]) * (CPF_FIRST_WEIGHT - i)
+        for i in range(CPF_BASE_LENGTH)
+    )
+    first_digit = (first_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
+    first_digit = (
+        0 if first_digit == CPF_DIGIT_LIMIT else first_digit
+    )
+
+    second_sum = sum(
+        int(digits[i]) * (CPF_SECOND_WEIGHT - i)
+        for i in range(CPF_FIRST_WEIGHT)
+    )
+    second_digit = (second_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
+    second_digit = (
+        0 if second_digit == CPF_DIGIT_LIMIT else second_digit
+    )
+
+    if (
+        digits[CPF_BASE_LENGTH] != str(first_digit)
+        or digits[CPF_FIRST_WEIGHT] != str(second_digit)
+    ):
+        raise ValueError('CPF inválido.')
+
+    return digits
 
 
 def validate_password_complexity(pwd: str) -> str:
@@ -36,8 +77,10 @@ def validate_password_complexity(pwd: str) -> str:
 class UserBase(BaseModel):
     name: str
     username: str
+    cpf: str
     email: EmailStr
     birthday: date
+    hiring_date: date
     setor: Setor
     subsetor: str
     role: Role = Role.USER
@@ -54,6 +97,12 @@ class UserBase(BaseModel):
         if isinstance(v, str):
             return v.strip()
         return v  # pragma: no cover
+
+    @field_validator('cpf', mode='before')
+    def validate_and_normalize_cpf(cls, v):
+        if not isinstance(v, str):
+            raise ValueError('CPF inválido.')
+        return validate_cpf(v)
 
 
 class UserCreate(UserBase):
@@ -97,6 +146,7 @@ class PaginatedUserList(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=4)
     username: Optional[str] = Field(None, min_length=4)
+    cpf: Optional[str] = None
     email: Optional[EmailStr] = None
     birthday: Optional[date] = None
     setor: Optional[Setor] = None
@@ -115,6 +165,14 @@ class UserUpdate(BaseModel):
         if isinstance(v, str):
             return v.strip()
         return v  # pragma: no cover
+
+    @field_validator('cpf', mode='before')
+    def validate_and_normalize_cpf(cls, v):
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError('CPF inválido.')
+        return validate_cpf(v)
 
 
 class UserQueryParams(BaseModel):

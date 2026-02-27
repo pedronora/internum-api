@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     ADMIN_NAME: str
     ADMIN_USERNAME: str
     ADMIN_EMAIL: str
+    ADMIN_CPF: str = '12345678909'
     ADMIN_PASSWORD: str
     ADMIN_BIRTHDAY: str
     MAILTRAP_TOKEN: str

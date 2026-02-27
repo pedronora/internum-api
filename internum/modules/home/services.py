@@ -25,9 +25,9 @@ class HomeService:
     async def _get_monthly_birthdays(self):
         return (
             await self.session.scalars(
-                select(User).where(
-                    extract('month', User.birthday) == self.today.month
-                )
+                select(User)
+                .where(extract('month', User.birthday) == self.today.month)
+                .order_by(extract('day', User.birthday))
             )
         ).all()
 

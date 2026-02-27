@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from uuid import uuid4
 
 from internum.modules.users.models import User
 from internum.modules.users.schemas import UserRead
@@ -6,7 +7,13 @@ from internum.modules.users.schemas import UserRead
 ENDPOINT_URL = '/api/v1/users'
 
 
+def build_test_password() -> str:
+    return f'Aa1!{uuid4().hex[:8]}'
+
+
 def test_create_user(client, mock_db_time, token_admin):
+    password = build_test_password()
+
     with mock_db_time(model=User) as time:
         response = client.post(
             ENDPOINT_URL,
@@ -14,9 +21,11 @@ def test_create_user(client, mock_db_time, token_admin):
             json={
                 'name': 'Pedro Nora',
                 'username': 'User_1',
-                'password': '@1Senha-teste',
+                'password': password,
+                'cpf': '123.456.789-09',
                 'email': 'TEST@test.com',
                 'birthday': '2020-01-01',
+                'hiring_date': '2026-02-05',
                 'role': 'user',
                 'setor': 'oficial',
                 'subsetor': 'titular',
@@ -30,21 +39,26 @@ def test_create_user(client, mock_db_time, token_admin):
     assert data['id'] > 0
     assert data['name'] == 'Pedro Nora'
     assert data['username'] == 'User_1'
+    assert data['cpf'] == '12345678909'
     assert data['email'] == 'test@test.com'
     assert data['birthday'] == '2020-01-01'
     assert data['created_at'] == time.isoformat() + 'Z'
 
 
 def test_create_user_without_permission(client, mock_db_time, token):
+    password = build_test_password()
+
     response = client.post(
         ENDPOINT_URL,
         headers={'Authorization': f'Bearer {token}'},
         json={
             'name': 'Pedro Nora',
             'username': 'User_1',
-            'password': 'senha-teste',
+            'password': password,
+            'cpf': '12345678909',
             'email': 'test@test.com',
             'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
             'role': 'user',
             'setor': 'oficial',
             'subsetor': 'titular',
@@ -55,6 +69,51 @@ def test_create_user_without_permission(client, mock_db_time, token):
     assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
 
 
+def test_create_user_without_cpf(client, token_admin):
+    password = build_test_password()
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': password,
+            'email': 'test@test.com',
+            'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
+            'role': 'user',
+            'setor': 'oficial',
+            'subsetor': 'titular',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_create_user_with_invalid_cpf(client, token_admin):
+    password = build_test_password()
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': password,
+            'cpf': '11111111111',
+            'email': 'test@test.com',
+            'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
+            'role': 'user',
+            'setor': 'oficial',
+            'subsetor': 'titular',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
 def test_create_user_with_existent_username(client, user, token_admin):
     response = client.post(
         ENDPOINT_URL,
@@ -63,8 +122,10 @@ def test_create_user_with_existent_username(client, user, token_admin):
             'name': user.name,
             'username': user.username,
             'password': user.clean_password,
+            'cpf': '12345678909',
             'email': 'other@mail.com',
             'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
             'setor': user.setor,
             'subsetor': user.subsetor,
             'role': user.role,
@@ -83,8 +144,10 @@ def test_create_user_with_existent_email(client, user, token_admin):
             'name': user.name,
             'username': 'new_username',
             'password': user.clean_password,
+            'cpf': '12345678909',
             'email': user.email,
             'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
             'setor': user.setor,
             'subsetor': user.subsetor,
             'role': user.role,
@@ -433,7 +496,10 @@ def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
 
 
 def test_user_change_pwd(client, user, token):
-    data = {'old_password': user.clean_password, 'new_password': '@Aa12345678'}
+    data = {
+        'old_password': user.clean_password,
+        'new_password': build_test_password(),
+    }
 
     response = client.post(
         f'{ENDPOINT_URL}/{user.id}/change-password',
@@ -462,8 +528,8 @@ def test_user_change_with_same_pwd(client, user, token):
 
 def test_change_pwd_user_not_found(client, token_admin):
     data = {
-        'old_password': '@Aa12345678',
-        'new_password': '@Aa12345678@',
+        'old_password': build_test_password(),
+        'new_password': build_test_password(),
     }
     response = client.post(
         f'{ENDPOINT_URL}/9999/change-password',
