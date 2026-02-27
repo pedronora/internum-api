@@ -20,7 +20,7 @@ class User:
     name: Mapped[str]
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
-    cpf: Mapped[str] = mapped_column(String(11), nullable=False)
+    cpf: Mapped[str] = mapped_column(String(11), nullable=False, unique=True)
     birthday: Mapped[date] = mapped_column(Date)
     email: Mapped[str] = mapped_column(unique=True)
     setor: Mapped[Setor] = mapped_column(
