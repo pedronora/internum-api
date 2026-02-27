@@ -8,6 +8,7 @@ from pydantic import (
     EmailStr,
     Field,
     field_validator,
+    model_validator,
     validator,
 )
 
@@ -122,6 +123,7 @@ class UserChangePassword(BaseModel):
 
 class UserRead(UserBase):
     id: int
+    termination_date: date | None = None
     created_at: datetime
     updated_at: datetime | None
 
@@ -149,6 +151,8 @@ class UserUpdate(BaseModel):
     cpf: Optional[str] = None
     email: Optional[EmailStr] = None
     birthday: Optional[date] = None
+    hiring_date: Optional[date] = None
+    termination_date: Optional[date] = None
     setor: Optional[Setor] = None
     subsetor: Optional[str] = Field(None, min_length=4)
     role: Optional[Role] = None
@@ -173,6 +177,14 @@ class UserUpdate(BaseModel):
         if not isinstance(v, str):
             raise ValueError('CPF inválido.')
         return validate_cpf(v)
+
+    @model_validator(mode='after')
+    def validate_active_termination_date(self):
+        if self.active is True and self.termination_date is not None:
+            raise ValueError(
+                'termination_date deve ser nulo quando active for true.'
+            )
+        return self
 
 
 class UserQueryParams(BaseModel):

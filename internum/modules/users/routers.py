@@ -40,7 +40,9 @@ async def create_user(
 ):
     db_user = await session.scalar(
         select(User).where(
-            (User.username == user.username) | (User.email == user.email)
+            (User.username == user.username)
+            | (User.email == user.email)
+            | (User.cpf == user.cpf)
         )
     )
 
@@ -54,6 +56,11 @@ async def create_user(
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
                 detail='Email já existente.',
+            )
+        elif db_user.cpf == user.cpf:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail='CPF já existente.',
             )
 
     data = user.model_dump()
@@ -174,6 +181,8 @@ async def update_user(
                 'setor',
                 'subsetor',
                 'active',
+                'hiring_date',
+                'termination_date',
             } and current_user.role not in {
                 'admin',
                 'coord',
@@ -186,6 +195,9 @@ async def update_user(
                     ),
                 )
             setattr(db_user, field, value)
+
+    if update_data.get('active') is True:
+        db_user.termination_date = None
     try:
         await session.commit()
         await session.refresh(db_user)
@@ -196,7 +208,7 @@ async def update_user(
         await session.rollback()
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
-            detail='Username ou Email já existem.',
+            detail='Username, Email ou CPF já existem.',
         )
     except Exception as e:
         await session.rollback()
