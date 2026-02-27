@@ -25,6 +25,13 @@ from internum.modules.library.schemas import (
     PaginatedBooksList,
     PaginatedLoansList,
 )
+from internum.modules.library.templates import (
+    loan_approve_template,
+    loan_cancel_template,
+    loan_reject_template,
+    loan_request_template,
+    loan_return_template,
+)
 from internum.modules.users.models import User
 
 router = APIRouter(prefix='/library', tags=['Library'])
@@ -291,30 +298,12 @@ async def request_loan(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
-    html_content = f"""
-    <html>
-      <body
-        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">
-            Confirmação de Solicitação de Empréstimo
-        </h2>
-        <p>Olá, {current_user.name}:</p>
-        <p>Seu pedido de empréstimo foi registrado com sucesso e será avaliado
-         pela coordenação.</p>
-        <h3>Detalhes do Livro:</h3>
-        <ul>
-          <li><strong>Título:</strong> {book_db.title}</li>
-          <li><strong>Autor:</strong> {book_db.author}</li>
-        </ul>
-        <p><strong>Data/Hora da Solicitação:</strong> {requested_str}</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #888;">
-          Esta é uma mensagem automática do sistema I
-          nternum - 1º SRI de Cascavel/PR.
-        </p>
-      </body>
-    </html>
-    """
+    html_content = loan_request_template(
+        user_name=current_user.name,
+        book_title=book_db.title,
+        book_author=book_db.author,
+        requested_str=requested_str,
+    )
 
     background_tasks.add_task(
         email_service.send_email,
@@ -369,29 +358,12 @@ async def cancel_loan(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
-    html_content = f"""
-    <html>
-      <body
-        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">
-            Confirmação de Cancelamento de Empréstimo
-        </h2>
-        <p>Olá, {current_user.name}:</p>
-        <p>Você cancelou seu pedido de emréstimo.</p>
-        <h3>Detalhes do Empréstimo:</h3>
-        <ul>
-          <li><strong>Título:</strong> {loan_db.book.title}</li>
-          <li><strong>Autor:</strong> {loan_db.book.author}</li>
-        </ul>
-        <p><strong>Data/Hora do Cancelamento:</strong> {canceled_str}</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #888;">
-          Esta é uma mensagem automática do sistema I
-          nternum - 1º SRI de Cascavel/PR.
-        </p>
-      </body>
-    </html>
-    """
+    html_content = loan_cancel_template(
+        current_user.name,
+        loan_db.book.title,
+        loan_db.book.author,
+        canceled_str,
+    )
 
     background_tasks.add_task(
         email_service.send_email,
@@ -453,30 +425,13 @@ async def approve_and_start_loan(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y')
 
-    html_content = f"""
-    <html>
-      <body
-        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">
-            Confirmação de Aprovação de Empréstimo
-        </h2>
-        <p>Olá, {current_user.name}:</p>
-        <p>Seu pedido de empréstimo foi aprovado pela coordenação.</p>
-        <h3>Detalhes do Empréstimo:</h3>
-        <ul>
-          <li><strong>Título:</strong> {loan_db.book.title}</li>
-          <li><strong>Autor:</strong> {loan_db.book.author}</li>
-          <li><strong>Devolver até:</strong> {due_date_str}
-        </ul>
-        <p><strong>Data/Hora da Solicitação:</strong> {requested_str}</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #888;">
-          Esta é uma mensagem automática do sistema I
-          nternum - 1º SRI de Cascavel/PR.
-        </p>
-      </body>
-    </html>
-    """
+    html_content = loan_approve_template(
+        user_name=current_user.name,
+        book_title=loan_db.book.title,
+        book_author=loan_db.book.author,
+        due_date_str=due_date_str,
+        requested_str=requested_str,
+    )
 
     background_tasks.add_task(
         email_service.send_email,
@@ -535,29 +490,12 @@ async def return_loan(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
-    html_content = f"""
-    <html>
-      <body
-        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">
-            Confirmação de Devolução de Empréstimo
-        </h2>
-        <p>Olá, {current_user.name}:</p>
-        <p>Seu empréstimo foi devolvido com sucesso.</p>
-        <h3>Detalhes do Empréstimo:</h3>
-        <ul>
-          <li><strong>Título:</strong> {loan_db.book.title}</li>
-          <li><strong>Autor:</strong> {loan_db.book.author}</li>
-        </ul>
-        <p><strong>Data/Hora da Devolução:</strong> {returned_str}</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #888;">
-          Esta é uma mensagem automática do sistema I
-          nternum - 1º SRI de Cascavel/PR.
-        </p>
-      </body>
-    </html>
-    """
+    html_content = loan_return_template(
+        user_name=current_user.name,
+        book_title=loan_db.book.title,
+        book_author=loan_db.book.author,
+        returned_str=returned_str,
+    )
 
     background_tasks.add_task(
         email_service.send_email,
@@ -616,32 +554,12 @@ async def reject_loan(
         ZoneInfo('America/Sao_Paulo')
     ).strftime('%d/%m/%Y %H:%M:%S')
 
-    html_content = f"""
-    <html>
-      <body
-        style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">
-            Informação de Rejeição de Empréstimo
-        </h2>
-        <p>Olá, {current_user.name}:</p>
-        <p>
-        Seu empréstimo foi rejeitado pela coordenação. Para maiores detalhes, 
-        procure seu coordendador
-        </p>
-        <h3>Detalhes do Empréstimo:</h3>
-        <ul>
-          <li><strong>Título:</strong> {loan_db.book.title}</li>
-          <li><strong>Autor:</strong> {loan_db.book.author}</li>
-        </ul>
-        <p><strong>Data/Hora da Rejeição:</strong> {reject_str}</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #888;">
-          Esta é uma mensagem automática do sistema I
-          nternum - 1º SRI de Cascavel/PR.
-        </p>
-      </body>
-    </html>
-    """  # noqa: W291
+    html_content = loan_reject_template(
+        user_name=current_user.name,
+        book_title=loan_db.book.title,
+        book_author=loan_db.book.author,
+        reject_str=reject_str,
+    )
 
     background_tasks.add_task(
         email_service.send_email,
