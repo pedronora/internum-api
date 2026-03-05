@@ -1,7 +1,7 @@
 # Internum API
 
-![Python](https://img.shields.io/badge/Python-3.14+-blue?logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3.13+-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.116+-009688?logo=fastapi)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supported-336791?logo=postgresql)
 ![Tests](https://img.shields.io/github/actions/workflow/status/pedronora/internum-api/lint-and-test.yaml?label=Tests)
@@ -29,12 +29,11 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 
 ## 🚀 Tecnologias principais
 
-- **Python 3.14+**
+- **Python 3.13+**
 - **FastAPI**
 - **SQLAlchemy 2.0 / Async**
 - **PostgreSQL**
 - **Alembic**
-- **Redis (cache / rate-limit / filas)**
 - **Pydantic**
 - **Poetry**
 - **Docker & Docker Compose**
@@ -166,7 +165,7 @@ POSTGRES_PORT=...
 POSTGRES_USER=...
 POSTGRES_DB=...
 POSTGRES_PASSWORD=...
-DATABASE_URL=postgress://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB
+DATABASE_URL=postgresql+psycopg://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB
 
 ADMIN_NAME='...'
 ADMIN_USERNAME='...'
@@ -226,7 +225,7 @@ poetry run task test
 
 - legal_briefs – Ementas de entendimentos jurídicos consolidados internamente
 
-- emails – envio assíncrono de e-mails
+- core/email – serviço de envio assíncrono de e-mails
 
 ## 👤 Autor
 
