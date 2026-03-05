@@ -98,6 +98,10 @@ class BookBaseSchema(BaseModel):
     year: int
     quantity: int
     available_quantity: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = dict(from_attributes=True)
 
 
 class BookDetailSchema(BookBaseSchema):
