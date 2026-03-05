@@ -1,3 +1,4 @@
+from datetime import datetime
 from http import HTTPStatus
 
 import factory
@@ -44,6 +45,9 @@ async def test_create_book_success(client, session, user_admin, token_admin):
     data = response.json()
     assert data['isbn'] == payload['isbn']
     assert data['title'] == payload['title']
+    assert 'created_at' in data
+    assert data['updated_at'] is None
+    datetime.fromisoformat(data['created_at'].replace('Z', '+00:00'))
 
     result = await session.scalar(
         select(Book).where(Book.isbn == payload['isbn'])
@@ -162,6 +166,9 @@ async def test_get_book_success(client, session, user_admin, token):
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert data['title'] == book.title
+    assert 'created_at' in data
+    assert 'updated_at' in data
+    datetime.fromisoformat(data['created_at'].replace('Z', '+00:00'))
 
 
 def test_get_book_not_found(client, token):
