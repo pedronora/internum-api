@@ -285,3 +285,27 @@ def loan_reject_template(
             'book_author': book_author,
         }
     )
+
+
+def loan_late_template(
+    user_name: str,
+    book_title: str,
+    book_author: str,
+    due_date_str: str,
+    alert_str: str,
+) -> str:
+    return _build_loan_email(
+        payload={
+            'title': 'Aviso de Empréstimo Atrasado',
+            'user_name': user_name,
+            'intro_message': (
+                'Identificamos que o prazo de devolução do seu empréstimo foi '
+                'ultrapassado. Regularize a devolução o quanto antes.'
+            ),
+            'event_label': 'Data/Hora do Aviso',
+            'event_value': alert_str,
+            'book_title': book_title,
+            'book_author': book_author,
+        },
+        due_date_str=due_date_str,
+    )

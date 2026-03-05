@@ -10,6 +10,7 @@ from internum.core.database import async_session_maker
 from internum.core.email import EmailService
 from internum.modules.library.enums import LoanStatus
 from internum.modules.library.models import Loan
+from internum.modules.library.templates import loan_late_template
 
 email_service = EmailService()
 
@@ -64,31 +65,17 @@ def send_alert_late_loan(loan: Loan):
         '%d/%m/%Y'
     )
 
-    html_content = f"""
-    <html>
-      <body
-      style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4CAF50;">Aviso de Empréstimo Atrasado</h2>
-        <p>Olá, {loan.created_by.name}:</p>
-        <p>O empréstimo abaixo está atrasado:</p>
-        <h3>Detalhes do Livro:</h3>
-        <ul>
-          <li><strong>Título:</strong> {loan.book.title}</li>
-          <li><strong>Autor:</strong> {loan.book.author}</li>
-          <li><strong>Data da devolução:</strong> {due_str}</li>
-        </ul>
-        <p><strong>Data/Hora do aviso:</strong> {alert_str}</p>
-        <hr>
-    <p style="font-size: 0.9em; color: #888;">
-    Esta é uma mensagem automática do sistema Internum - 1º SRI de Cascavel/PR.
-    </p>
-      </body>
-    </html>
-    """
+    html_content = loan_late_template(
+        user_name=loan.created_by.name,
+        book_title=loan.book.title,
+        book_author=loan.book.author,
+        due_date_str=due_str,
+        alert_str=alert_str,
+    )
 
     email_service.send_email(
         email_to=[loan.created_by.email],
-        subject='[Internhum] Aviso de Empréstimo Atrasado',
+        subject='[Internum] Aviso de Empréstimo Atrasado',
         html=html_content,
         category='Loan Late',
     )
