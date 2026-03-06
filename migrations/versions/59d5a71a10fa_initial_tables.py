@@ -1,8 +1,8 @@
 """Initial tables
 
-Revision ID: 504a0de55569
+Revision ID: 59d5a71a10fa
 Revises: 
-Create Date: 2025-11-26 13:26:26.468313
+Create Date: 2026-03-06 10:43:43.964199
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '504a0de55569'
+revision: str = '59d5a71a10fa'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -36,15 +36,19 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('username', sa.String(), nullable=False),
     sa.Column('password', sa.String(), nullable=False),
+    sa.Column('cpf', sa.String(length=11), nullable=False),
     sa.Column('birthday', sa.Date(), nullable=False),
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('setor', sa.Enum('REGISTRO', 'ADMINISTRATIVO', 'OFICIAL', name='setor_enum'), nullable=False),
     sa.Column('subsetor', sa.String(), nullable=False),
+    sa.Column('hiring_date', sa.Date(), nullable=False),
+    sa.Column('termination_date', sa.Date(), nullable=True),
     sa.Column('role', sa.Enum('ADMIN', 'COORD', 'USER', name='role_enum'), nullable=False),
     sa.Column('active', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text("timezone('UTC', now())"), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('cpf'),
     sa.UniqueConstraint('email'),
     sa.UniqueConstraint('username')
     )
