@@ -209,6 +209,39 @@ poetry run task format
 poetry run task test
 ```
 
+## 🐳 Deploy (Docker + TrueNAS)
+
+1. Construir a imagem do backend localmente:
+
+```bash
+docker build -t internum-api:0.1.0 .
+```
+
+2. Exportar a imagem para arquivo:
+
+```bash
+docker save internum-api:0.1.0 -o internum-api-0.1.0.tar
+```
+
+3. No TrueNAS, importar a imagem:
+
+```bash
+docker load -i internum-api-0.1.0.tar
+```
+
+4. Criar `.env.production` a partir de `.env.production.example` e ajustar credenciais/URLs (incluindo `API_IMAGE_TAG`).
+
+5. Subir com compose de deploy:
+
+```bash
+docker compose -f internum/infra/compose.deploy.yaml up -d
+```
+
+Observações:
+- O serviço `api` usa imagem pronta (`internum-api:${API_IMAGE_TAG}`) e não faz `build`.
+- O Postgres sobe em container separado (`db`) com volume persistente `postgres_data`.
+- No startup da API, as migrations são aplicadas automaticamente (`alembic upgrade head`).
+
 ---
 
 ## 📡 Estrutura dos módulos
