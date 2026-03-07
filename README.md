@@ -209,6 +209,35 @@ poetry run task format
 poetry run task test
 ```
 
+## 🐳 Deploy (Docker + TrueNAS)
+
+1. Construir a imagem do backend localmente:
+
+```bash
+docker build -t internum-api:0.1.0 .
+```
+
+2. Exportar a imagem para arquivo:
+
+```bash
+docker save internum-api:0.1.0 -o internum-api-0.1.0.tar
+```
+
+3. No TrueNAS, importar a imagem:
+
+```bash
+docker load -i internum-api-0.1.0.tar
+```
+
+4. No TrueNAS, criar a aplicação/container usando a imagem importada (`internum-api:0.1.0`).
+
+5. Configurar as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `DATABASE_URL`, `SECRET_KEY`, `MAILTRAP_TOKEN`).
+
+Observações:
+- A imagem já possui `ENTRYPOINT` para aguardar o banco e iniciar a API.
+- Por padrão, as migrations são aplicadas no startup (`RUN_MIGRATIONS=true`).
+- Garanta conectividade da API com o banco de dados e persistência no serviço de banco.
+
 ---
 
 ## 📡 Estrutura dos módulos
