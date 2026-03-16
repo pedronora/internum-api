@@ -158,26 +158,31 @@ def test_create_user_with_existent_email(client, user, token_admin):
     assert response.json()['detail'] == 'Email já existente.'
 
 
-def test_create_user_with_existent_cpf(client, user, token_admin):
+def test_create_admin_by_coord(client, mock_db_time, token_coord):
+    password = build_test_password()
+
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_coord}'},
         json={
-            'name': user.name,
-            'username': 'new_username',
-            'password': user.clean_password,
-            'cpf': user.cpf,
-            'email': 'other@mail.com',
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': password,
+            'cpf': '123.456.789-09',
+            'email': 'TEST@test.com',
             'birthday': '2020-01-01',
             'hiring_date': '2026-02-05',
-            'setor': user.setor,
-            'subsetor': user.subsetor,
-            'role': user.role,
+            'role': 'admin',
+            'setor': 'oficial',
+            'subsetor': 'titular',
         },
     )
 
-    assert response.status_code == HTTPStatus.CONFLICT
-    assert response.json()['detail'] == 'CPF já existente.'
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == (
+        'Acesso negado: Somente administradores podem '
+        'atribuir o perfil de administrador.'
+    )
 
 
 def test_get_users(client, token_admin):
@@ -354,19 +359,19 @@ def test_update_user_reject_termination_date_when_active(
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_update_role_without_permissions(client, user, token):
-    update_data = {'role': 'coord'}
+def test_update_role_to_admin_by_coord(client, user, token_coord):
+    update_data = {'role': 'admin'}
 
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers={'Authorization': f'Bearer {token_coord}'},
         json=update_data,
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == (
-        'Acesso negado: usuário sem permissão para definir os '
-        'campos perfil, setor, subsetor e ativo'
+        'Acesso negado: Somente administradores podem '
+        'atribuir o perfil de administrador.'
     )
 
 

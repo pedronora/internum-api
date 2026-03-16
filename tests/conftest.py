@@ -156,6 +156,18 @@ def token_admin(client, user_admin):
     return response.json()['access_token']
 
 
+@pytest.fixture
+def token_coord(client, user_coord):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_coord.username,
+            'password': user_coord.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
 @contextmanager
 def _mock_db_time(*, model, time=datetime(2025, 5, 21)):
     def fake_time_hook(mapper, connection, target):
@@ -216,6 +228,22 @@ async def user_admin(session):
 
     user.password = get_password_hash(plain_password)
     user.role = 'admin'
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    user.clean_password = plain_password
+
+    return user
+
+
+@pytest_asyncio.fixture
+async def user_coord(session):
+    user = UserFactory()
+    plain_password = user.password
+
+    user.password = get_password_hash(plain_password)
+    user.role = 'coord'
 
     session.add(user)
     await session.commit()
