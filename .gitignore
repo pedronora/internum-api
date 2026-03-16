@@ -181,3 +181,6 @@ pyrightconfig.json
 # Scripts
 */scripts/*
 !*/scripts/seed_admin.py
+
+# VS Code
+.vscode/

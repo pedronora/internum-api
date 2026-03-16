@@ -46,6 +46,7 @@ pre_test = 'task lint'
 test = 'pytest -s -x --cov=internum -vv'
 post_test = 'coverage html'
 commit = 'cz commit'
+dockerBuild = 'docker build -t internum-api:latest .'
 
 [tool.ruff]
 line-length = 79
