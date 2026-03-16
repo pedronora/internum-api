@@ -65,6 +65,14 @@ async def create_user(
 
     data = user.model_dump()
     data['password'] = get_password_hash(data['password'])
+
+    if data['role'] == 'admin' and current_user.role != 'admin':
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Acesso negado: Somente administradores podem '
+            'atribuir o perfil de administrador.',
+        )
+
     db_user = User(**data)
 
     session.add(db_user)
@@ -176,32 +184,44 @@ async def update_user(
 
     for field, value in update_data.items():
         if value is not None and hasattr(db_user, field):
-            if field in {
+            sensitive_fields = {
                 'role',
                 'setor',
                 'subsetor',
                 'active',
                 'hiring_date',
                 'termination_date',
-            } and current_user.role not in {
+            }
+
+            if field in sensitive_fields and current_user.role not in {
                 'admin',
                 'coord',
             }:
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN,
-                    detail=(
-                        'Acesso negado: usuário sem permissão para definir os '
-                        'campos perfil, setor, subsetor e ativo'
-                    ),
+                    detail='Acesso negado: sem permissão para alterar campos '
+                    'administrativos.',
                 )
+
+            if (
+                field == 'role'
+                and value == 'admin'
+                and current_user.role != 'admin'
+            ):
+                raise HTTPException(
+                    status_code=HTTPStatus.FORBIDDEN,
+                    detail='Acesso negado: Somente administradores podem '
+                    'atribuir o perfil de administrador.',
+                )
+
             setattr(db_user, field, value)
 
     if update_data.get('active') is True:
         db_user.termination_date = None
+
     try:
         await session.commit()
         await session.refresh(db_user)
-
         return db_user
 
     except IntegrityError:
@@ -214,7 +234,7 @@ async def update_user(
         await session.rollback()
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f'Erro interno ao atualizar usuário. {(e)}',
+            detail=f'Erro interno ao atualizar usuário: {str(e)}',
         )
 
 
