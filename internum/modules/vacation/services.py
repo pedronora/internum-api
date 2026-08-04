@@ -202,6 +202,7 @@ class CLTVacationService:
             next_period_end=next_end,
             next_accrued_days=0,
         )
+        balance.created_by_id = user.id
         self.session.add(balance)
         await self.session.flush()
         return balance
@@ -239,9 +240,6 @@ class CLTVacationService:
         balance = await self.calculate_balance(user)
         errors = self.validate_periods_clt(request.periods, user.hiring_date)
 
-        if errors:
-            return VacationPreviewResponse(valid=False, errors=errors)
-
         warnings = []
         total_days = 0
         total_working_days = 0
@@ -255,29 +253,19 @@ class CLTVacationService:
                 period.start_date, period.end_date
             )
 
-            period_errors = self.validate_period_dates(
-                period.start_date, period.end_date
-            )
-            if period_errors:
-                errors.extend(
-                    [f'Período {i + 1}: {e}' for e in period_errors]
-                )
-
             if cal_days >= self.MIN_MAIN_PERIOD_DAYS:
                 period_type = VacationPeriodType.FULL
             else:
                 period_type = VacationPeriodType.PROPORTIONAL
 
-            periods_detail.append(
-                {
-                    'index': i + 1,
-                    'start_date': period.start_date.isoformat(),
-                    'end_date': period.end_date.isoformat(),
-                    'calendar_days': cal_days,
-                    'working_days': work_days,
-                    'period_type': period_type.value,
-                }
-            )
+            periods_detail.append({
+                'index': i + 1,
+                'start_date': period.start_date.isoformat(),
+                'end_date': period.end_date.isoformat(),
+                'calendar_days': cal_days,
+                'working_days': work_days,
+                'period_type': period_type.value,
+            })
 
             total_days += cal_days
             total_working_days += work_days
@@ -321,6 +309,7 @@ class CLTVacationService:
             status=VacationRequestStatus.SUBMITTED,
             requested_at=datetime.now(),
         )
+        request.created_by_id = user.id
         self.session.add(request)
         await self.session.flush()
 
@@ -347,6 +336,7 @@ class CLTVacationService:
                 days_count=cal_days,
                 working_days_count=work_days,
             )
+            period.created_by_id = user.id
             self.session.add(period)
 
         await self.session.flush()

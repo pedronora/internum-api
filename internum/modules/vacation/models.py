@@ -105,7 +105,9 @@ class VacationRequest(AuditMixin):
         ForeignKey('users.id', ondelete='CASCADE'), nullable=False
     )
     reviewer_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey('users.id', ondelete='SET NULL'), nullable=True
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        default=None,
     )
 
     status: Mapped[VacationRequestStatus] = mapped_column(

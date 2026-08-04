@@ -12,7 +12,6 @@ from internum.core.permissions import (
     CurrentUser,
     VerifyAdmin,
     VerifyAdminCoord,
-    VerifySelfAdminCoord,
 )
 from internum.modules.users.models import User
 from internum.modules.vacation.enums import VacationRequestStatus
@@ -51,6 +50,7 @@ async def get_my_balance(
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     balance = await service.calculate_balance(current_user)
+    await session.refresh(balance)
     return balance
 
 
@@ -67,6 +67,7 @@ async def get_user_balance(
             status_code=HTTPStatus.NOT_FOUND, detail='Usuário não encontrado'
         )
     balance = await service.calculate_balance(user)
+    await session.refresh(balance)
     return balance
 
 
@@ -115,9 +116,11 @@ async def list_vacation_requests(  # noqa: PLR0913, PLR0917
     if status:
         query = query.where(VacationRequest.status == status)
 
-    query = query.order_by(
-        VacationRequest.created_at.desc()
-    ).offset(skip).limit(limit)
+    query = (
+        query.order_by(VacationRequest.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
 
     result = await session.execute(query)
     requests = result.scalars().all()
@@ -141,13 +144,21 @@ async def list_vacation_requests(  # noqa: PLR0913, PLR0917
 async def get_vacation_request(
     request_id: int,
     session: Session,
-    current_user: VerifySelfAdminCoord,
+    current_user: CurrentUser,
 ):
     request = await _load_request_with_relations(session, request_id)
     if not request:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Solicitação não encontrada',
+        )
+    if request.user_id != current_user.id and current_user.role not in {
+        'admin',
+        'coord',
+    }:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Acesso negado: usuário sem permissão',
         )
     return request
 
@@ -215,6 +226,7 @@ async def update_vacation_request(
                 days_count=cal_days,
                 working_days_count=work_days,
             )
+            period.created_by_id = request.user_id
             session.add(period)
 
     if data.reviewer_notes is not None:
@@ -309,9 +321,7 @@ async def approve_vacation_request(
             request, current_user, data.reviewer_notes
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     if data.periods:
         for i, period_update in enumerate(data.periods):
@@ -354,9 +364,7 @@ async def reject_vacation_request(
             request, current_user, data.reviewer_notes
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     await session.commit()
     return await _load_request_with_relations(session, request.id)
@@ -381,9 +389,7 @@ async def cancel_vacation_request(
     try:
         request = await service.cancel_request(request, current_user)
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     await session.commit()
     return await _load_request_with_relations(session, request.id)
@@ -399,11 +405,10 @@ async def sell_vacation_days(
     try:
         balance = await service.sell_vacation_days(current_user, data.days)
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     await session.commit()
+    await session.refresh(balance)
     return balance
 
 
@@ -431,11 +436,10 @@ async def adjust_vacation_balance(
             data.adjustment_reason,
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail=str(e)
-        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(e))
 
     await session.commit()
+    await session.refresh(balance)
     return balance
 
 
