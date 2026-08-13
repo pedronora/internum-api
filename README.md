@@ -224,35 +224,34 @@ poetry run task format
 poetry run task test
 ```
 
-## 🐳 Deploy (Docker + TrueNAS)
+## 🐳 Deploy (Docker + GitHub Container Registry)
 
-1. Construir a imagem do backend localmente:
+Build local da imagem (tag `ghcr.io/pedronora/internum-api:local`):
 
 ```bash
 task dockerBuild
 ```
 
-Ou manualmente:
+A imagem de produção fica em **GHCR**: `ghcr.io/pedronora/internum-api`.
+
+- Tag de release: `:1.0.0` (imutável, usa-se em produção)
+- Tag de desenvolvimento: `:latest` e `:sha-<commit>`
+- O CI (`docker-publish.yaml`) publica `latest` nos merges para `main` e `X.Y.Z` quando uma tag `vX.Y.Z` é criada.
+
+No TrueNAS:
+
+1. Use a imagem `ghcr.io/pedronora/internum-api:1.0.0` (pull direto, sem `docker save/load`).
+2. Crie o app usando essa imagem.
+3. Configure as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `SECRET_KEY`, `MAILTRAP_TOKEN`) ou via `env_file`.
+
+## 🏷️ Criar uma release
 
 ```bash
-docker build -t internum-api:latest .
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-2. Exportar a imagem para arquivo:
-
-```bash
-docker save internum-api:latest -o internum-api-latest.tar
-```
-
-3. No TrueNAS, importar a imagem:
-
-```bash
-docker load -i internum-api-latest.tar
-```
-
-4. No TrueNAS, criar a aplicação/container usando a imagem importada (`internum-api:latest`).
-
-5. Configurar as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `DATABASE_URL`, `SECRET_KEY`, `MAILTRAP_TOKEN`).
+O CI publica a imagem com o rótulo da versão no GHCR.
 
 Observações:
 

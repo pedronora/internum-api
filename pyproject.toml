@@ -1,6 +1,6 @@
 [project]
 name = "internum"
-version = "0.1.0"
+version = "1.0.0"
 description = ""
 authors = [{ name = "Pedro Nora", email = "pedro@nora.vc" }]
 readme = "README.md"
@@ -47,7 +47,7 @@ pre_test = 'task lint'
 test = 'pytest -s -x --cov=internum -vv'
 post_test = 'coverage html'
 commit = 'cz commit'
-dockerBuild = 'docker build -t internum-api:latest .'
+dockerBuild = 'docker build -t ghcr.io/pedronora/internum-api:local .'
 
 [tool.ruff]
 line-length = 79
