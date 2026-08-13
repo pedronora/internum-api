@@ -58,13 +58,13 @@ async def login_for_access_token(
     if not user or not user.active:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
-            detail='Email ou senha incorretos',
+            detail='Usuário ou senha incorretos',
         )
 
     if not verify_password(form_data.password, user.password):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
-            detail='Email ou senha incorretos',
+            detail='Usuário ou senha incorretos',
         )
 
     access_token = create_access_token(data={'sub': user.username})
