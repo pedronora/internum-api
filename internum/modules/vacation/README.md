@@ -146,7 +146,7 @@ Prefixo: `/api/v1/vacation` (definido em `internum/api/main.py`).
 | GET | `/accrual-periods/{user_id}` | Admin/Coord | Períodos de outro usuário |
 | GET | `/accrual-periods/{user_id}/{period_id}` | Admin/Coord | Período específico com concessões |
 | POST | `/accrual-periods/{user_id}/{period_id}/sell` | **Admin** | Vender dias (abono pecuniário) |
-| POST | `/accrual-periods/{user_id}/{period_id}/grants` | **Admin** | Cadastrar gozo retroativo ou pagamento em dobro |
+| POST | `/accrual-periods/{user_id}/{period_id}/grants` | Admin/Coord | Cadastrar concessão: `normal` (marcar férias em período concessivo), `retroactive`/`double_payment` (período expirado) |
 
 ### Solicitações (Requests)
 | Método | Rota | Permissão | Descrição |
@@ -207,15 +207,23 @@ Grants cadastrados pelo **admin** em período expirado (retroativo/dobro) são *
 já nascem `FRUITED`/`PAID_DOUBLE`, somam direto em `days_enjoyed`/`days_double_paid` e não passam
 pela confirmação do RH (nem reservam dias).
 
-### Fluxos especiais (apenas Admin)
+A **marcação direta** de férias (`grant_type=normal`) em período concessivo nasce `GRANTED`,
+reserva dias (`days_reserved`) e segue o fluxo normal de confirmação do RH
+(`POST /grants/{grant_id}/confirm-fruition`).
 
-1. **Venda de dias** (`POST .../sell`): abono pecuniário (Art. 143), máx. 10 dias/período,
+### Fluxos especiais (Admin/Coord)
+
+1. **Marcação direta de férias** (`grant_type=normal`): admin/coord registra o gozo em período
+   `CONCESSIVE` sem solicitação prévia. Valida as mesmas regras CLT das solicitações
+   (mín. 5 dias, sem início em sexta/sábado/domingo/feriado e regra do saldo restante).
+   Nasce `GRANTED` e reserva dias até a confirmação do RH.
+2. **Venda de dias** (`POST .../sell`): abono pecuniário (Art. 143), máx. 10 dias/período,
    apenas em período não expirado, respeitando saldo e a regra de gozo fracionado.
-2. **Gozo retroativo** (`grant_type=retroactive`): cadastro de gozo ocorrido no passado,
+3. **Gozo retroativo** (`grant_type=retroactive`): cadastro de gozo ocorrido no passado,
    apenas em período `EXPIRED`, mínimo 5 dias. Já nasce `FRUITED` e soma em `days_enjoyed`.
-3. **Pagamento em dobro** (`grant_type=double_payment`): indenização por não gozo (Art. 137),
+4. **Pagamento em dobro** (`grant_type=double_payment`): indenização por não gozo (Art. 137),
    apenas em período `EXPIRED`. Já nasce `PAID_DOUBLE` e soma em `days_double_paid`.
-4. **Alertas** (`GET /alerts`): lista períodos expirados com saldo a regularizar.
+5. **Alertas** (`GET /alerts`): lista períodos expirados com saldo a regularizar.
 
 ## Validações no Schema
 
@@ -232,10 +240,10 @@ VacationRequestCreate:
 VacationSellDaysRequest:
     days: int  # ge=1, le=10
 
-VacationGrantAdminCreate:  # Apenas Admin
+VacationGrantAdminCreate:  # Admin/Coord
     start_date: date
     end_date: date
-    grant_type: VacationGrantType  # retroactive | double_payment
+    grant_type: VacationGrantType  # normal | retroactive | double_payment
     notes: Optional[str]
 
 VacationConfirmFruitionRequest:
@@ -253,7 +261,7 @@ Métodos principais:
 - `approve_request(request, reviewer, notes)` - Aprova, cria grants e reserva dias
 - `reject_request(request, reviewer, notes)` - Rejeita
 - `cancel_request(request, user)` - Cancela (apenas dono, se pendente)
-- `create_grant(data, creator)` - Gozo retroativo/dobro (admin, período expirado); terminais (`FRUITED`/`PAID_DOUBLE`)
+- `create_grant(data, creator)` - Marcação direta (normal, período concessivo, com validação CLT) ou regularização (retroativo/dobro, período expirado)
 - `list_grants(user_id, status, accrual_period_id, setor, subsetor)` - Concessões com filtros (inclui por setor/subsetor do empregado)
 - `confirm_fruition(grant, user, confirm, notes)` - RH confirma/nega fruição
 - `sell_days(accrual, days, admin)` - Venda de dias (abono pecuniário)
@@ -268,8 +276,8 @@ VerifyAdminCoord     # role in ['admin', 'coord']
 VerifyAdmin          # role == 'admin'
 ```
 
-- **Admin/Coord** aprovam/rejeitam solicitações, veem dados de qualquer usuário e recebem alertas.
-- **Admin** (apenas) vende dias, cadastra gozo retroativo/dobro (terminais) e confirma fruição de grants normais.
+- **Admin/Coord** aprovam/rejeitam solicitações, veem dados de qualquer usuário, recebem alertas e cadastram concessões (`normal`/`retroactive`/`double_payment`).
+- **Admin** (apenas) vende dias e confirma fruição de grants normais.
 - **Usuário** consulta e solicita apenas seus próprios dados.
 
 ## Integração
@@ -297,7 +305,7 @@ poetry run alembic upgrade head
 
 ## Testes
 
-Todos os testes do módulo passam (58 casos em `tests/test_vacation.py`). Para executar:
+Todos os testes do módulo passam (64 casos em `tests/test_vacation.py`). Para executar:
 ```bash
 poetry run task test -- -k vacation
 ```

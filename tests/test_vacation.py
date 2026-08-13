@@ -936,6 +936,111 @@ def test_create_grant_on_non_expired_period(
 
 
 @freeze_time(FROZEN_NOW)
+def test_create_normal_grant_on_concessive_period(
+    client, vacation_user, vacation_admin
+):
+    headers = auth_headers(client, vacation_user)
+    period = get_period_by_status(client, headers, 'concessive')
+    response = client.post(
+        f'{ENDPOINT_URL}/accrual-periods/'
+        f'{vacation_user.id}/{period["id"]}/grants',
+        headers=auth_headers(client, vacation_admin),
+        json={
+            'start_date': MAIN_PERIOD['start_date'],
+            'end_date': MAIN_PERIOD['end_date'],
+            'grant_type': 'normal',
+            'notes': 'Marcado direto pelo RH',
+        },
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    data = response.json()
+    assert data['grant_type'] == 'normal'
+    assert data['status'] == 'granted'
+    assert data['days_count'] == MAIN_CAL_DAYS
+    assert data['is_regularization'] is False
+    assert data['approved_by_id'] == vacation_admin.id
+    assert data['confirmed_by_id'] is None
+
+    updated = get_accrual_periods(client, headers)
+    period = next(p for p in updated if p['id'] == period['id'])
+    assert period['days_reserved'] == MAIN_CAL_DAYS
+    assert period['days_enjoyed'] == 0
+
+
+@freeze_time(FROZEN_NOW)
+def test_create_normal_grant_requires_concessive_period(
+    client, vacation_old_user, vacation_admin
+):
+    headers = auth_headers(client, vacation_old_user)
+    period = get_period_by_status(client, headers, 'expired')
+    response = client.post(
+        f'{ENDPOINT_URL}/accrual-periods/'
+        f'{vacation_old_user.id}/{period["id"]}/grants',
+        headers=auth_headers(client, vacation_admin),
+        json={
+            'start_date': '2025-06-12',
+            'end_date': '2025-06-21',
+            'grant_type': 'normal',
+        },
+    )
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert 'concessivo' in response.json()['detail']
+
+
+@freeze_time(FROZEN_NOW)
+def test_create_normal_grant_clt_validation(
+    client, vacation_user, vacation_admin
+):
+    headers = auth_headers(client, vacation_user)
+    period = get_period_by_status(client, headers, 'concessive')
+    response = client.post(
+        f'{ENDPOINT_URL}/accrual-periods/'
+        f'{vacation_user.id}/{period["id"]}/grants',
+        headers=auth_headers(client, vacation_admin),
+        json={
+            'start_date': WEEKEND_START_PERIOD['start_date'],
+            'end_date': WEEKEND_START_PERIOD['end_date'],
+            'grant_type': 'normal',
+        },
+    )
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert 'sábado' in response.json()['detail']
+
+
+@freeze_time(FROZEN_NOW)
+def test_create_normal_grant_can_confirm_fruition(
+    client, vacation_user, vacation_admin
+):
+    headers = auth_headers(client, vacation_user)
+    period = get_period_by_status(client, headers, 'concessive')
+    response = client.post(
+        f'{ENDPOINT_URL}/accrual-periods/'
+        f'{vacation_user.id}/{period["id"]}/grants',
+        headers=auth_headers(client, vacation_admin),
+        json={
+            'start_date': MAIN_PERIOD['start_date'],
+            'end_date': MAIN_PERIOD['end_date'],
+            'grant_type': 'normal',
+        },
+    )
+    assert response.status_code == HTTPStatus.CREATED
+    grant = response.json()
+
+    response = client.post(
+        f'{ENDPOINT_URL}/grants/{grant["id"]}/confirm-fruition',
+        headers=auth_headers(client, vacation_admin),
+        json={'confirm': True},
+    )
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['status'] == 'fruited'
+
+    updated = get_accrual_periods(client, headers)
+    period = next(p for p in updated if p['id'] == period['id'])
+    assert period['days_reserved'] == 0
+    assert period['days_enjoyed'] == MAIN_CAL_DAYS
+
+
+@freeze_time(FROZEN_NOW)
 def test_double_payment_flow(client, vacation_old_user, vacation_admin):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
