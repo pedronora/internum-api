@@ -32,14 +32,13 @@ RUN groupadd -r app && useradd -r -g app app
 
 WORKDIR /app
 
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/internum /app/internum
-COPY --from=builder /app/migrations /app/migrations
-COPY --from=builder /app/alembic.ini /app/alembic.ini
-COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+COPY --chown=app:app --from=builder /app/.venv /app/.venv
+COPY --chown=app:app --from=builder /app/internum /app/internum
+COPY --chown=app:app --from=builder /app/migrations /app/migrations
+COPY --chown=app:app --from=builder /app/alembic.ini /app/alembic.ini
+COPY --chown=app:app --from=builder /app/pyproject.toml /app/pyproject.toml
 
-RUN chmod +x /app/internum/infra/entrypoint.sh \
-    && chown -R app:app /app
+RUN chmod +x /app/internum/infra/entrypoint.sh
 
 USER app
 
