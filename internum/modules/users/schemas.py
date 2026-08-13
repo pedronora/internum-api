@@ -33,27 +33,21 @@ def validate_cpf(cpf: str) -> str:
         raise ValueError('CPF inválido.')
 
     first_sum = sum(
-        int(digits[i]) * (CPF_FIRST_WEIGHT - i)
-        for i in range(CPF_BASE_LENGTH)
+        int(digits[i]) * (CPF_FIRST_WEIGHT - i) for i in range(CPF_BASE_LENGTH)
     )
     first_digit = (first_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
-    first_digit = (
-        0 if first_digit == CPF_DIGIT_LIMIT else first_digit
-    )
+    first_digit = 0 if first_digit == CPF_DIGIT_LIMIT else first_digit
 
     second_sum = sum(
         int(digits[i]) * (CPF_SECOND_WEIGHT - i)
         for i in range(CPF_FIRST_WEIGHT)
     )
     second_digit = (second_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
-    second_digit = (
-        0 if second_digit == CPF_DIGIT_LIMIT else second_digit
-    )
+    second_digit = 0 if second_digit == CPF_DIGIT_LIMIT else second_digit
 
-    if (
-        digits[CPF_BASE_LENGTH] != str(first_digit)
-        or digits[CPF_FIRST_WEIGHT] != str(second_digit)
-    ):
+    if digits[CPF_BASE_LENGTH] != str(first_digit) or digits[
+        CPF_FIRST_WEIGHT
+    ] != str(second_digit):
         raise ValueError('CPF inválido.')
 
     return digits

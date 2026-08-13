@@ -25,7 +25,7 @@ async def create_admin(session: Session):
         role=Role.ADMIN,
         setor=Setor.ADMINISTRATIVO,
         subsetor='Apoio',
-        hiring_date=settings.ADMIN_BIRTHDAY,
+        hiring_date=settings.ADMIN_HIRING_DATE or settings.ADMIN_BIRTHDAY,
     )
 
     session.add(admin)

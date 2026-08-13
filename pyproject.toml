@@ -15,6 +15,7 @@ dependencies = [
     "pwdlib[argon2] (>=0.2.1,<0.3.0)",
     "apscheduler (>=3.11.1,<4.0.0)",
     "mailtrap (>=2.3.0,<3.0.0)",
+    "holidays (>=0.52.0,<1.0.0)",
 ]
 
 
