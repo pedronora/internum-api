@@ -5,6 +5,13 @@ Todas as mudanças relevantes desta imagem serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o versionamento segue o padrão [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.1.1] - 2026-08-13
+
+### Fixed
+
+- Mensagem de erro de login ajustada para "Usuário ou senha incorretos", deixando claro
+  que o problema pode estar no usuário, e não apenas no email.
+
 ## [1.1.0] - 2026-08-13
 
 ### Added
