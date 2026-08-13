@@ -181,7 +181,11 @@ async def create_vacation_grant(  # noqa: PLR0913, PLR0917
     current_user: VerifyAdminCoord,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
-    """Cadastra gozo retroativo ou pagamento em dobro (admin/coord)."""
+    """Cadastra concessão de férias (admin/coord).
+
+    - normal: marcação direta de férias em período concessivo;
+    - retroactive / double_payment: regularização de período expirado.
+    """
     data = VacationGrantCreate(
         user_id=user_id,
         accrual_period_id=period_id,

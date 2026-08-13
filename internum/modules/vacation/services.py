@@ -584,13 +584,21 @@ class CLTVacationService:  # noqa: PLR0904
     async def create_grant(
         self, data: VacationGrantCreate, creator: User
     ) -> VacationGrant:
-        """Admin cadastra gozo retroativo ou pagamento em dobro (Art. 137)."""
+        """Admin/coord cadastra concessão de férias.
+
+        - NORMAL: marca férias diretamente em período concessivo (grant
+          GRANTED, reserva dias; RH confirma a fruição depois);
+        - RETROACTIVE / DOUBLE_PAYMENT: regulariza período expirado
+          (Art. 137), grants terminais.
+        """
         if data.grant_type not in {
+            VacationGrantType.NORMAL,
             VacationGrantType.RETROACTIVE,
             VacationGrantType.DOUBLE_PAYMENT,
         }:
             raise ValueError(
-                'Tipo de concessão inválido; use retroactive ou double_payment'
+                'Tipo de concessão inválido; use normal, retroactive ou '
+                'double_payment'
             )
 
         result = await self.session.execute(
@@ -604,31 +612,15 @@ class CLTVacationService:  # noqa: PLR0904
             raise ValueError('Período aquisitivo não encontrado')
 
         self._sync_period(accrual, date.today())
-        if accrual.status != VacationAccrualStatus.EXPIRED:
-            raise ValueError(
-                'Apenas períodos com concessivo expirado aceitam '
-                'gozo retroativo ou pagamento em dobro'
-            )
-
-        days = self.count_calendar_days(data.start_date, data.end_date)
-        if days < 1:
-            raise ValueError('Período inválido')
-        if data.grant_type == VacationGrantType.RETROACTIVE:
-            if days < self.MIN_PERIOD_DAYS:
-                raise ValueError(
-                    f'Mínimo de {self.MIN_PERIOD_DAYS} dias corridos para gozo'
-                )
-        if days > accrual.available_days:
-            raise ValueError(
-                f'Dias ({days}) excedem saldo disponível '
-                f'({accrual.available_days})'
-            )
+        is_regularization = data.grant_type in {
+            VacationGrantType.RETROACTIVE,
+            VacationGrantType.DOUBLE_PAYMENT,
+        }
+        days = await self._validate_grant_dates(
+            data, accrual, creator, is_regularization
+        )
 
         now = datetime.now()
-        if data.grant_type == VacationGrantType.DOUBLE_PAYMENT:
-            status = VacationGrantStatus.PAID_DOUBLE
-        else:
-            status = VacationGrantStatus.FRUITED
         grant = VacationGrant(
             user_id=data.user_id,
             accrual_period_id=accrual.id,
@@ -636,22 +628,80 @@ class CLTVacationService:  # noqa: PLR0904
             end_date=data.end_date,
             days_count=days,
             grant_type=data.grant_type,
-            status=status,
+            status=self._grant_initial_status(data.grant_type),
             approved_by_id=creator.id,
             approved_at=now,
-            confirmed_by_id=creator.id,
-            confirmed_at=now,
+            confirmed_by_id=creator.id if is_regularization else None,
+            confirmed_at=now if is_regularization else None,
             notes=data.notes,
         )
         grant.created_by_id = creator.id
         self.session.add(grant)
         if data.grant_type == VacationGrantType.DOUBLE_PAYMENT:
             accrual.days_double_paid += days
+        elif data.grant_type == VacationGrantType.NORMAL:
+            accrual.days_reserved += days
         else:
             accrual.days_enjoyed += days
         self._sync_period(accrual, date.today())
         await self.session.flush()
         return grant
+
+    async def _validate_grant_dates(
+        self,
+        data: VacationGrantCreate,
+        accrual: VacationAccrualPeriod,
+        creator: User,
+        is_regularization: bool,
+    ) -> int:
+        """Valida datas/saldo de uma concessão cadastrada pelo admin."""
+        days = self.count_calendar_days(data.start_date, data.end_date)
+        if days < 1:
+            raise ValueError('Período inválido')
+
+        if is_regularization:
+            if accrual.status != VacationAccrualStatus.EXPIRED:
+                raise ValueError(
+                    'Apenas períodos com concessivo expirado aceitam '
+                    'gozo retroativo ou pagamento em dobro'
+                )
+            if days > accrual.available_days:
+                raise ValueError(
+                    f'Dias ({days}) excedem saldo disponível '
+                    f'({accrual.available_days})'
+                )
+            if (
+                data.grant_type == VacationGrantType.RETROACTIVE
+                and days < self.MIN_PERIOD_DAYS
+            ):
+                raise ValueError(
+                    f'Mínimo de {self.MIN_PERIOD_DAYS} dias corridos '
+                    'para gozo'
+                )
+            return days
+
+        if accrual.status != VacationAccrualStatus.CONCESSIVE:
+            raise ValueError(
+                'Apenas períodos em gozo (concessivo) aceitam '
+                'marcação direta de férias'
+            )
+        period = VacationPeriodCreate(
+            start_date=data.start_date, end_date=data.end_date
+        )
+        errors = await self.validate_periods_clt(creator, accrual, [period])
+        if errors:
+            raise ValueError('; '.join(errors))
+        return days
+
+    @staticmethod
+    def _grant_initial_status(
+        grant_type: VacationGrantType,
+    ) -> VacationGrantStatus:
+        if grant_type == VacationGrantType.DOUBLE_PAYMENT:
+            return VacationGrantStatus.PAID_DOUBLE
+        if grant_type == VacationGrantType.NORMAL:
+            return VacationGrantStatus.GRANTED
+        return VacationGrantStatus.FRUITED
 
     async def get_grant(self, grant_id: int) -> VacationGrant | None:
         result = await self.session.execute(
