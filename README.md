@@ -19,6 +19,7 @@ Esta API centraliza operações relacionadas a:
 - Gestão de avisos internos
 - Repositório de ementas
 - Biblioteca e acervo digital internos
+- Gestão de férias (períodos aquisitivos, concessões, solicitações e alertas)
 - Geração e envio de e-mails
 - Workflows e módulos administrativos
 - Persistência e segurança dos dados
@@ -35,6 +36,7 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 - **PostgreSQL**
 - **Alembic**
 - **Pydantic**
+- **holidays**
 - **Poetry**
 - **Docker & Docker Compose**
 - **GitHub Actions (lint + test)**
@@ -91,11 +93,18 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 │   │   │   ├── models.py
 │   │   │   ├── routers.py
 │   │   │   └── schemas.py
-│   │   └── users
+│   │   ├── users
+│   │   │   ├── enums.py
+│   │   │   ├── models.py
+│   │   │   ├── routers.py
+│   │   │   └── schemas.py
+│   │   └── vacation
 │   │       ├── enums.py
 │   │       ├── models.py
+│   │       ├── README.md
 │   │       ├── routers.py
-│   │       └── schemas.py
+│   │       ├── schemas.py
+│   │       └── services.py
 │   ├── scripts
 │   │   └── seed_admin.py
 │   └── utils
@@ -105,7 +114,11 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 │   ├── README
 │   ├── script.py.mako
 │   └── versions
-│       └── 504a0de55569_initial_tables.py
+│       ├── 39ee918fcd37_rename_vacation_enum_values.py
+│       ├── 59d5a71a10fa_initial_tables.py
+│       ├── a80e880d8e9d_add_vacation_module.py
+│       ├── a911d5bbe8d1_refactor_vacation_to_accrual_periods_.py
+│       └── ad24530970ef_add_vacation_historical_periods_table.py
 ├── poetry.lock
 ├── pyproject.toml
 ├── README.md
@@ -121,9 +134,10 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
     ├── test_notice.py
     ├── test_security.py
     ├── test_status.py
-    └── test_user.py
+    ├── test_user.py
+    └── test_vacation.py
 
-19 directories, 59 files
+24 directories, 91 files
 ```
 
 ---
@@ -172,6 +186,7 @@ ADMIN_USERNAME='...'
 ADMIN_EMAIL='...'
 ADMIN_PASSWORD=''
 ADMIN_BIRTHDAY='YYYY-MM-DD'
+ADMIN_HIRING_DATE='YYYY-MM-DD'
 
 MAILTRAP_TOKEN='...'
 ```
@@ -260,6 +275,8 @@ Observações:
 - library – biblioteca técnica interna (livros, empréstimos, categorias)
 
 - legal_briefs – Ementas de entendimentos jurídicos consolidados internamente
+
+- vacation – gestão de férias (períodos aquisitivos, concessões, solicitações e alertas)
 
 - core/email – serviço de envio assíncrono de e-mails
 
