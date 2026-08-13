@@ -28,13 +28,10 @@ def generate_valid_cpf(seed: int) -> str:
     base = f'{seed:0{CPF_BASE_LENGTH}d}'
 
     first_sum = sum(
-        int(base[i]) * (CPF_FIRST_WEIGHT - i)
-        for i in range(CPF_BASE_LENGTH)
+        int(base[i]) * (CPF_FIRST_WEIGHT - i) for i in range(CPF_BASE_LENGTH)
     )
     first_digit = (first_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
-    first_digit = (
-        0 if first_digit == CPF_DIGIT_LIMIT else first_digit
-    )
+    first_digit = 0 if first_digit == CPF_DIGIT_LIMIT else first_digit
 
     base_with_first = base + str(first_digit)
     second_sum = sum(
@@ -42,9 +39,7 @@ def generate_valid_cpf(seed: int) -> str:
         for i in range(CPF_FIRST_WEIGHT)
     )
     second_digit = (second_sum * CPF_DIGIT_LIMIT) % CPF_LENGTH
-    second_digit = (
-        0 if second_digit == CPF_DIGIT_LIMIT else second_digit
-    )
+    second_digit = 0 if second_digit == CPF_DIGIT_LIMIT else second_digit
 
     return base_with_first + str(second_digit)
 
