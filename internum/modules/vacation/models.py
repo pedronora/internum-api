@@ -19,9 +19,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from internum.core.models.mixins import AuditMixin
 from internum.core.models.registry import table_registry
 from internum.modules.vacation.enums import (
+    VacationAccrualStatus,
+    VacationGrantStatus,
+    VacationGrantType,
     VacationPeriodType,
     VacationRequestStatus,
-    VacationStatus,
 )
 
 if TYPE_CHECKING:
@@ -29,71 +31,156 @@ if TYPE_CHECKING:
 
 
 @table_registry.mapped_as_dataclass
-class VacationBalance(AuditMixin):
-    __tablename__ = 'vacation_balances'
+class VacationAccrualPeriod(AuditMixin):
+    __tablename__ = 'vacation_accrual_periods'
 
     id: Mapped[int] = mapped_column(init=False, primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True
+        ForeignKey('users.id', ondelete='CASCADE'), nullable=False
     )
 
-    current_period_start: Mapped[date] = mapped_column(Date, nullable=False)
-    current_period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    period_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    accrued_days: Mapped[int] = mapped_column(Integer, default=0)
-    proportional_days: Mapped[int] = mapped_column(Integer, default=0)
-    enjoyed_days: Mapped[int] = mapped_column(Integer, default=0)
-    sold_days: Mapped[int] = mapped_column(Integer, default=0)
+    # Período aquisitivo (trabalhou)
+    acquisitive_start: Mapped[date] = mapped_column(Date, nullable=False)
+    acquisitive_end: Mapped[date] = mapped_column(Date, nullable=False)
 
-    # Ajuste manual para migração/histórico pré-existente
-    manual_adjustment_days: Mapped[int] = mapped_column(Integer, default=0)
-    adjustment_reason: Mapped[Optional[str]] = mapped_column(
-        String, nullable=True, default=None
-    )
-    adjusted_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None
-    )
-    adjusted_by_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey('users.id', ondelete='SET NULL'),
-        nullable=True,
-        default=None,
+    # Período concessivo (pode gozar)
+    concessive_start: Mapped[date] = mapped_column(Date, nullable=False)
+    concessive_end: Mapped[date] = mapped_column(Date, nullable=False)
+
+    status: Mapped[VacationAccrualStatus] = mapped_column(
+        SqlEnum(VacationAccrualStatus, name='vacation_accrual_status_enum'),
+        default=VacationAccrualStatus.ACQUISITIVE,
+        nullable=False,
     )
 
-    next_period_start: Mapped[Optional[date]] = mapped_column(
-        Date, nullable=True, default=None
+    # Direitos e contadores (dias corridos)
+    days_earned: Mapped[int] = mapped_column(Integer, default=30)
+    days_reserved: Mapped[int] = mapped_column(Integer, default=0)
+    days_enjoyed: Mapped[int] = mapped_column(Integer, default=0)
+    days_sold: Mapped[int] = mapped_column(Integer, default=0)
+    days_double_paid: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Se período concessivo expirou sem fruição
+    is_double_eligible: Mapped[bool] = mapped_column(
+        default=False, nullable=False
     )
-    next_period_end: Mapped[Optional[date]] = mapped_column(
-        Date, nullable=True, default=None
-    )
-    next_accrued_days: Mapped[int] = mapped_column(Integer, default=0)
 
     user: Mapped['User'] = relationship(
         'User',
-        foreign_keys='VacationBalance.user_id',
-        backref='vacation_balance',
-        lazy='joined',
+        foreign_keys='VacationAccrualPeriod.user_id',
+        backref='vacation_accrual_periods',
+        lazy='selectin',
         init=False,
     )
-    adjusted_by: Mapped[Optional['User']] = relationship(
-        'User',
-        foreign_keys='VacationBalance.adjusted_by_id',
-        lazy='joined',
-        init=False,
+
+    __table_args__ = (
+        UniqueConstraint(
+            'user_id', 'period_number', name='uq_accrual_user_period'
+        ),
     )
 
     @property
     def available_days(self) -> int:
+        """Saldo disponível para gozo/reserva."""
         return (
-            self.accrued_days
-            + self.proportional_days
-            + self.manual_adjustment_days
-            - self.enjoyed_days
-            - self.sold_days
+            self.days_earned
+            - self.days_reserved
+            - self.days_enjoyed
+            - self.days_sold
+            - self.days_double_paid
         )
 
     @property
-    def total_earned(self) -> int:
-        return self.accrued_days + self.proportional_days
+    def is_expired(self) -> bool:
+        return self.status == VacationAccrualStatus.EXPIRED
+
+
+@table_registry.mapped_as_dataclass
+class VacationGrant(AuditMixin):
+    __tablename__ = 'vacation_grants'
+
+    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey('users.id', ondelete='CASCADE'), nullable=False
+    )
+    accrual_period_id: Mapped[int] = mapped_column(
+        ForeignKey('vacation_accrual_periods.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    days_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    grant_type: Mapped[VacationGrantType] = mapped_column(
+        SqlEnum(VacationGrantType, name='vacation_grant_type_enum'),
+        default=VacationGrantType.NORMAL,
+        nullable=False,
+    )
+
+    status: Mapped[VacationGrantStatus] = mapped_column(
+        SqlEnum(VacationGrantStatus, name='vacation_grant_status_enum'),
+        default=VacationGrantStatus.GRANTED,
+        nullable=False,
+    )
+
+    approved_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        default=None,
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    confirmed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+        default=None,
+    )
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    notes: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, default=None
+    )
+
+    user: Mapped['User'] = relationship(
+        'User',
+        foreign_keys='VacationGrant.user_id',
+        backref='vacation_grants',
+        lazy='joined',
+        init=False,
+    )
+    accrual_period: Mapped['VacationAccrualPeriod'] = relationship(
+        'VacationAccrualPeriod',
+        foreign_keys='VacationGrant.accrual_period_id',
+        backref='grants',
+        lazy='joined',
+        init=False,
+    )
+    approved_by: Mapped[Optional['User']] = relationship(
+        'User',
+        foreign_keys='VacationGrant.approved_by_id',
+        lazy='joined',
+        init=False,
+    )
+    confirmed_by: Mapped[Optional['User']] = relationship(
+        'User',
+        foreign_keys='VacationGrant.confirmed_by_id',
+        lazy='joined',
+        init=False,
+    )
+
+    @property
+    def is_regularization(self) -> bool:
+        return self.grant_type in {
+            VacationGrantType.RETROACTIVE,
+            VacationGrantType.DOUBLE_PAYMENT,
+        }
 
 
 @table_registry.mapped_as_dataclass
@@ -103,6 +190,10 @@ class VacationRequest(AuditMixin):
     id: Mapped[int] = mapped_column(init=False, primary_key=True)
     user_id: Mapped[int] = mapped_column(
         ForeignKey('users.id', ondelete='CASCADE'), nullable=False
+    )
+    target_accrual_period_id: Mapped[int] = mapped_column(
+        ForeignKey('vacation_accrual_periods.id', ondelete='CASCADE'),
+        nullable=False,
     )
     reviewer_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey('users.id', ondelete='SET NULL'),
@@ -128,14 +219,21 @@ class VacationRequest(AuditMixin):
 
     user: Mapped['User'] = relationship(
         'User',
-        foreign_keys=[user_id],
+        foreign_keys='VacationRequest.user_id',
         backref='vacation_requests',
+        lazy='joined',
+        init=False,
+    )
+    target_accrual_period: Mapped['VacationAccrualPeriod'] = relationship(
+        'VacationAccrualPeriod',
+        foreign_keys='VacationRequest.target_accrual_period_id',
+        backref='requests',
         lazy='joined',
         init=False,
     )
     reviewer: Mapped[Optional['User']] = relationship(
         'User',
-        foreign_keys=[reviewer_id],
+        foreign_keys='VacationRequest.reviewer_id',
         backref='reviewed_vacation_requests',
         lazy='joined',
         init=False,
@@ -162,22 +260,11 @@ class VacationPeriod(AuditMixin):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     period_type: Mapped[VacationPeriodType] = mapped_column(
         SqlEnum(VacationPeriodType, name='vacation_period_type_enum'),
-        default=VacationPeriodType.FULL,
+        default=VacationPeriodType.MAIN,
         nullable=False,
     )
 
-    status: Mapped[VacationStatus] = mapped_column(
-        SqlEnum(VacationStatus, name='vacation_status_enum'),
-        default=VacationStatus.PENDING,
-        nullable=False,
-    )
-
-    days_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    working_days_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
+    days_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     request: Mapped['VacationRequest'] = relationship(
         'VacationRequest', back_populates='periods', lazy='joined', init=False
@@ -188,7 +275,3 @@ class VacationPeriod(AuditMixin):
             'request_id', 'start_date', name='uq_period_request_start'
         ),
     )
-
-    @property
-    def is_approved(self) -> bool:
-        return self.status == VacationStatus.APPROVED

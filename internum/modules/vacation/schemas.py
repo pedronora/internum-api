@@ -1,27 +1,39 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from internum.modules.vacation.enums import (
+    VacationAccrualStatus,
+    VacationAlertType,
+    VacationGrantStatus,
+    VacationGrantType,
     VacationPeriodType,
     VacationRequestStatus,
-    VacationStatus,
 )
 
+if TYPE_CHECKING:
+    from internum.modules.vacation.schemas import (
+        VacationAccrualPeriodRead,
+        VacationGrantRead,
+    )
+
 MAX_PERIODS = 3
+VACATION_DAYS_PER_YEAR = 30
+MIN_PERIOD_DAYS = 5
+MIN_MAIN_PERIOD_DAYS = 14
 MAX_SELL_DAYS = 10
 
 
 class VacationPeriodBase(BaseModel):
     start_date: date
     end_date: date
-    period_type: VacationPeriodType = VacationPeriodType.FULL
 
     @field_validator('end_date')
     @classmethod
     def end_after_start(cls, v: date, info) -> date:
-        if 'start_date' in info.data and v < info.data['start_date']:
+        start_date = info.data.get('start_date')
+        if start_date and v < start_date:
             raise ValueError('Data de fim deve ser posterior à data de início')
         return v
 
@@ -30,27 +42,10 @@ class VacationPeriodCreate(VacationPeriodBase):
     pass
 
 
-class VacationPeriodUpdate(BaseModel):
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    period_type: Optional[VacationPeriodType] = None
-
-    @model_validator(mode='after')
-    def check_dates(self) -> 'VacationPeriodUpdate':
-        if (
-            self.start_date
-            and self.end_date
-            and self.end_date < self.start_date
-        ):
-            raise ValueError('Data de fim deve ser posterior à data de início')
-        return self
-
-
 class VacationPeriodRead(VacationPeriodBase):
     id: int
-    status: VacationStatus
+    period_type: VacationPeriodType
     days_count: int
-    working_days_count: int
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -58,28 +53,23 @@ class VacationPeriodRead(VacationPeriodBase):
         from_attributes = True
 
 
-class VacationRequestBase(BaseModel):
-    pass
-
-
 class VacationRequestCreate(BaseModel):
-    periods: list[VacationPeriodCreate] = Field(min_length=1, max_length=3)
+    target_accrual_period_id: int
+    periods: list[VacationPeriodCreate] = Field(
+        min_length=1, max_length=MAX_PERIODS
+    )
 
     @model_validator(mode='after')
     def validate_periods(self) -> 'VacationRequestCreate':
         if len(self.periods) > MAX_PERIODS:
-            raise ValueError('Máximo de 3 períodos de férias')
+            raise ValueError(f'Máximo de {MAX_PERIODS} períodos de férias')
         return self
 
 
-class VacationRequestUpdate(BaseModel):
-    periods: Optional[list[VacationPeriodUpdate]] = None
-    reviewer_notes: Optional[str] = None
-
-
-class VacationRequestRead(VacationRequestBase):
+class VacationRequestRead(BaseModel):
     id: int
     user_id: int
+    target_accrual_period_id: int
     reviewer_id: Optional[int] = None
     status: VacationRequestStatus
     requested_at: Optional[datetime] = None
@@ -99,6 +89,7 @@ class VacationRequestListItem(BaseModel):
     id: int
     user_id: int
     user_name: str
+    target_accrual_period_id: int
     status: VacationRequestStatus
     requested_at: Optional[datetime] = None
     total_days: int
@@ -109,37 +100,79 @@ class VacationRequestListItem(BaseModel):
         from_attributes = True
 
 
-class VacationBalanceRead(BaseModel):
+class VacationAccrualPeriodRead(BaseModel):
     id: int
     user_id: int
-    current_period_start: date
-    current_period_end: date
-    accrued_days: int
-    proportional_days: int
-    enjoyed_days: int
-    sold_days: int
-    manual_adjustment_days: int
-    adjustment_reason: Optional[str] = None
-    adjusted_at: Optional[datetime] = None
-    adjusted_by_id: Optional[int] = None
+    period_number: int
+    acquisitive_start: date
+    acquisitive_end: date
+    concessive_start: date
+    concessive_end: date
+    status: VacationAccrualStatus
+    days_earned: int
+    days_reserved: int
+    days_enjoyed: int
+    days_sold: int
+    days_double_paid: int
+    is_double_eligible: bool
     available_days: int
-    next_period_start: Optional[date] = None
-    next_period_end: Optional[date] = None
-    next_accrued_days: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    grants: list['VacationGrantRead'] = []
+
+    class Config:
+        from_attributes = True
+
+
+class VacationGrantBase(BaseModel):
+    user_id: int
+    accrual_period_id: int
+    start_date: date
+    end_date: date
+    grant_type: VacationGrantType
+    notes: Optional[str] = None
+
+
+class VacationGrantCreate(VacationGrantBase):
+    pass
+
+
+class VacationGrantAdminCreate(BaseModel):
+    start_date: date
+    end_date: date
+    grant_type: VacationGrantType
+    notes: Optional[str] = None
+
+
+class VacationGrantRead(VacationGrantBase):
+    id: int
+    days_count: int
+    status: VacationGrantStatus
+    approved_by_id: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    confirmed_by_id: Optional[int] = None
+    confirmed_at: Optional[datetime] = None
+    is_regularization: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    user_name: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    confirmed_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
 class VacationPreviewRequest(BaseModel):
-    periods: list[VacationPeriodCreate] = Field(min_length=1, max_length=3)
+    target_accrual_period_id: Optional[int] = None
+    periods: list[VacationPeriodCreate] = Field(
+        min_length=1, max_length=MAX_PERIODS
+    )
 
     @model_validator(mode='after')
     def validate_periods(self) -> 'VacationPreviewRequest':
         if len(self.periods) > MAX_PERIODS:
-            raise ValueError('Máximo de 3 períodos de férias')
+            raise ValueError(f'Máximo de {MAX_PERIODS} períodos de férias')
         return self
 
 
@@ -148,14 +181,11 @@ class VacationPreviewResponse(BaseModel):
     errors: list[str] = []
     warnings: list[str] = []
     total_days: int
-    total_working_days: int
     periods_detail: list[dict] = []
 
 
-class VacationApprovalRequest(BaseModel):
-    action: str = Field(pattern='^(approve|reject)$')
+class VacationReviewRequest(BaseModel):
     reviewer_notes: Optional[str] = None
-    periods: Optional[list[VacationPeriodUpdate]] = None
 
 
 class VacationSellDaysRequest(BaseModel):
@@ -166,11 +196,26 @@ class VacationSellDaysRequest(BaseModel):
     def validate_sell_days(cls, v: int) -> int:
         if v > MAX_SELL_DAYS:
             raise ValueError(
-                'Máximo 10 dias podem ser vendidos por período aquisitivo'
+                'Máximo '
+                f'{MAX_SELL_DAYS} dias podem ser vendidos '
+                'por período aquisitivo'
             )
         return v
 
 
-class VacationBalanceAdjustRequest(BaseModel):
-    manual_adjustment_days: int
-    adjustment_reason: str = Field(min_length=5, max_length=500)
+class VacationConfirmFruitionRequest(BaseModel):
+    confirm: bool
+    notes: Optional[str] = None
+
+
+class VacationAccrualPeriodAlert(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    period_number: int
+    acquisitive_start: date
+    acquisitive_end: date
+    concessive_start: date
+    concessive_end: date
+    remaining_days: int
+    alert_type: VacationAlertType
