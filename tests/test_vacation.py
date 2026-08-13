@@ -1132,8 +1132,11 @@ def test_pending_alert_for_open_concessive_without_schedule(
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
-    assert len(alerts) == 1
-    alert = alerts[0]
+    user_alerts = [
+        alert for alert in alerts if alert['user_id'] == vacation_user.id
+    ]
+    assert len(user_alerts) == 1
+    alert = user_alerts[0]
     assert alert['alert_type'] == 'pending'
     assert alert['remaining_days'] == VACATION_YEAR_DAYS
 
@@ -1150,8 +1153,33 @@ def test_about_to_expire_alert(client, about_to_expire_user, vacation_admin):
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
-    assert len(alerts) == 1
-    assert alerts[0]['alert_type'] == 'about_to_expire'
+    user_alerts = [
+        alert
+        for alert in alerts
+        if alert['user_id'] == about_to_expire_user.id
+    ]
+    assert len(user_alerts) == 1
+    assert user_alerts[0]['alert_type'] == 'about_to_expire'
+
+
+@freeze_time(FROZEN_NOW)
+def test_alert_appears_for_user_without_prior_interaction(
+    client, vacation_old_user, vacation_admin
+):
+    """Usuário que nunca acessou o módulo deve aparecer nos alertas."""
+    response = client.get(
+        ENDPOINT_URL + '/alerts',
+        headers=auth_headers(client, vacation_admin),
+    )
+    assert response.status_code == HTTPStatus.OK
+    alerts = response.json()
+    user_alerts = [
+        alert for alert in alerts if alert['user_id'] == vacation_old_user.id
+    ]
+    assert user_alerts, (
+        'Usuário sem interação prévia deve aparecer nos alertas'
+    )
+    assert any(alert['alert_type'] == 'expired' for alert in user_alerts)
 
 
 @freeze_time(FROZEN_NOW)
@@ -1165,7 +1193,11 @@ def test_no_alert_when_request_pending(client, vacation_user, vacation_admin):
         headers=auth_headers(client, vacation_admin),
     )
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == []
+    alerts = response.json()
+    user_alerts = [
+        alert for alert in alerts if alert['user_id'] == vacation_user.id
+    ]
+    assert user_alerts == []
 
 
 @freeze_time(FROZEN_NOW)
@@ -1186,7 +1218,11 @@ def test_no_alert_when_grant_active(client, vacation_user, vacation_admin):
         headers=auth_headers(client, vacation_admin),
     )
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == []
+    alerts = response.json()
+    user_alerts = [
+        alert for alert in alerts if alert['user_id'] == vacation_user.id
+    ]
+    assert user_alerts == []
 
 
 # --- Filtro por setor/subsetor -------------------------------------------

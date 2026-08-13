@@ -196,6 +196,14 @@ class CLTVacationService:  # noqa: PLR0904
         await self.session.flush()
         return periods
 
+    async def ensure_all_users_accrual_periods(self) -> None:
+        """Garante períodos aquisitivos de todos os usuários ativos."""
+        result = await self.session.execute(
+            select(User).where(User.active.is_(True))
+        )
+        for user in result.scalars().all():
+            await self.ensure_accrual_periods(user)
+
     async def get_accrual_periods(
         self, user: User
     ) -> list[VacationAccrualPeriod]:
@@ -776,6 +784,7 @@ class CLTVacationService:  # noqa: PLR0904
         - Em aberto sem férias marcadas ou solicitadas (basta marcar).
         """
         today = date.today()
+        await self.ensure_all_users_accrual_periods()
         result = await self.session.execute(
             select(VacationAccrualPeriod)
             .options(
