@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ADMIN_CPF: str = '12345678909'
     ADMIN_PASSWORD: str
     ADMIN_BIRTHDAY: str
-    ADMIN_HIRING_DATE: str
+    ADMIN_HIRING_DATE: str = ''
     MAILTRAP_TOKEN: str
 
     def __init__(self, **values):
