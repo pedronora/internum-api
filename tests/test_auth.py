@@ -55,7 +55,7 @@ def test_token_inexistent_user(client):
         data={'username': 'no_user@no_domain.com', 'password': 'testtest'},
     )
     assert response.status_code == HTTPStatus.UNAUTHORIZED
-    assert response.json() == {'detail': 'Email ou senha incorretos'}
+    assert response.json() == {'detail': 'Usuário ou senha incorretos'}
 
 
 def test_token_wrong_password(client, user):
@@ -64,7 +64,7 @@ def test_token_wrong_password(client, user):
         data={'username': user.username, 'password': 'wrong_password'},
     )
     assert response.status_code == HTTPStatus.UNAUTHORIZED
-    assert response.json() == {'detail': 'Email ou senha incorretos'}
+    assert response.json() == {'detail': 'Usuário ou senha incorretos'}
 
 
 def test_token_expired_refresh_token(client, user):
