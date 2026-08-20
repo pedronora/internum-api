@@ -49,6 +49,57 @@ def test_create_legal_brief_without_permission(client, user, token):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
+def test_create_legal_brief_sanitizes_content(
+    client, user_admin, token_admin
+):
+    new_legal_brief = {
+        'title': 'Ementa com HTML',
+        'content': (
+            '<p><strong>Texto</strong></p>'
+            '<script>alert("xss")</script>'
+            '<img src="x" onerror="alert(1)">'
+        ),
+    }
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json=new_legal_brief,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    content = response.json()['content']
+    assert '<strong>Texto</strong>' in content
+    assert '<script' not in content
+    assert '<img' not in content
+    assert 'onerror' not in content
+
+
+@pytest.mark.asyncio
+async def test_update_legal_brief_sanitizes_content(
+    session, client, user_admin, token_admin
+):
+    brief = LegalBrief(title='Original', content='Conteúdo inicial')
+    brief.created_by_id = user_admin.id
+    session.add(brief)
+    await session.commit()
+
+    response = client.put(
+        ENDPOINT_URL + f'/{brief.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'title': 'Atualizado',
+            'content': '<p>Novo <script>alert(1)</script></p>',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    content = response.json()['content']
+    assert 'Novo' in content
+    assert '<script' not in content
+    assert 'onerror' not in content
+
+
 def test_create_legal_brief_value_missing(client, user_admin, token_admin):
     new_legal_brief = {
         'title': '',
@@ -194,6 +245,64 @@ async def test_update_legal_brief_creates_revision(
 
     assert revisions is not None
     assert revisions[0]['content'] == 'Conteúdo inicial'
+
+
+@pytest.mark.asyncio
+async def test_update_legal_brief_formatting_only_no_new_revision(
+    session, client, user_admin, token_admin
+):
+    brief = LegalBrief(
+        title='Original',
+        content='<p>Conteúdo inicial</p>',
+    )
+    brief.created_by_id = user_admin.id
+    session.add(brief)
+    await session.commit()
+    await session.refresh(brief)
+
+    response = client.put(
+        ENDPOINT_URL + f'/{brief.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'title': 'Original',
+            'content': '<p><strong>Conteúdo inicial</strong></p>',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['title'] == 'Original'
+    assert data['content'] == '<p><strong>Conteúdo inicial</strong></p>'
+    assert data['revisions'] == []
+
+
+@pytest.mark.asyncio
+async def test_update_legal_brief_title_change_creates_revision(
+    session, client, user_admin, token_admin
+):
+    brief = LegalBrief(
+        title='Original',
+        content='<p>Conteúdo inicial</p>',
+    )
+    brief.created_by_id = user_admin.id
+    session.add(brief)
+    await session.commit()
+    await session.refresh(brief)
+
+    response = client.put(
+        ENDPOINT_URL + f'/{brief.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'title': 'Novo título',
+            'content': '<p><strong>Conteúdo inicial</strong></p>',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['title'] == 'Novo título'
+    assert data['revisions'] is not None
+    assert data['revisions'][0]['content'] == '<p>Conteúdo inicial</p>'
 
 
 def test_update_legal_brief_not_found(session, client, token_admin):

@@ -43,6 +43,31 @@ def test_create_notice_without_permission(client, user, token):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
+def test_create_notice_sanitizes_content(client, user_admin, token_admin):
+    new_notice = {
+        'title': 'Aviso com HTML',
+        'content': (
+            '<p><em>Texto</em>'
+            '<script>alert("xss")</script>'
+            '<img src="x" onerror="alert(1)">'
+            '</p>'
+        ),
+    }
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json=new_notice,
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    content = response.json()['content']
+    assert '<em>Texto</em>' in content
+    assert '<script' not in content
+    assert '<img' not in content
+    assert 'onerror' not in content
+
+
 def test_create_notice_value_missing(client, user_admin, token_admin):
     new_notice = {'title': '', 'content': 'Conteúdo do aviso teste'}
 

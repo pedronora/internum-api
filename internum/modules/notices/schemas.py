@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from internum.utils.sanitize import sanitize_rich_text
+
 
 class UserPublic(BaseModel):
     id: int
@@ -14,11 +16,15 @@ class NoticeCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
 
-    @field_validator('title', 'content', mode='before')
-    def strip_whitespace(cls, v):
+    @field_validator('title', mode='before')
+    def strip_title(cls, v):
         if isinstance(v, str):
             return v.strip()
-        return v
+        return v  # pragma: no cover
+
+    @field_validator('content', mode='before')
+    def sanitize_content(cls, v):
+        return sanitize_rich_text(v)
 
 
 class NoticeReadSchema(BaseModel):
