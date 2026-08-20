@@ -1,3 +1,6 @@
+import re
+from html import unescape
+
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
@@ -57,3 +60,17 @@ def sanitize_rich_text(value: str) -> str:
         css_sanitizer=RICH_TEXT_CSS,
         strip=True,
     ).strip()
+
+
+def plain_text(value: str) -> str:
+    """Extrai o texto puro de um HTML rico, ignorando marcação de formatação.
+
+    Remove tags, decodifica entidades e normaliza espaços em branco, permitindo
+    comparar o conteúdo semântico de dois HTMLs independentemente da
+    formatação.
+    """
+    if not isinstance(value, str):
+        return ''
+    text = re.sub(r'<[^>]*>', '', value)
+    text = unescape(text)
+    return re.sub(r'\s+', ' ', text).strip()
