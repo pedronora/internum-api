@@ -5,6 +5,18 @@ Todas as mudanças relevantes desta imagem serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o versionamento segue o padrão [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.2.0] - 2026-08-20
+
+### Added
+
+- Sanitização do conteúdo rico (HTML do editor TipTap) em ementas e avisos com
+  `bleach`: permitidas apenas as tags do editor, atributos `href`/`title`/etc.
+  em links e `text-align` via `CSSSanitizer` (deps `bleach` + `tinycss2`).
+- `update_legal_brief` agora só cria `LegalBriefRevision` quando o **texto**
+  (ignorando marcação HTML) ou o **título** mudam. Alterações apenas de
+  formatação (mesmo conteúdo) atualizam a `LegalBrief` diretamente, sem nova
+  revisão (helper `plain_text()`).
+
 ## [1.1.1] - 2026-08-13
 
 ### Fixed
