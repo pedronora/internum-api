@@ -19,6 +19,7 @@ from internum.modules.legal_briefs.schemas import (
     PageMeta,
     PaginatedLegalBriefList,
 )
+from internum.utils.sanitize import plain_text
 
 router = APIRouter(prefix='/legal-briefs', tags=['Legal Briefs'])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -199,15 +200,21 @@ async def update_legal_brief(
         )
 
     try:
-        revision = LegalBriefRevision(
-            brief_id=current_brief.id,
-            title=current_brief.title,
-            content=current_brief.content,
+        content_changed = plain_text(data.content) != plain_text(
+            current_brief.content
         )
-        revision.created_by_id = current_brief.created_by_id
-        revision.created_by = current_brief.created_by
-        revision.mark_updated(current_brief.id)
-        session.add(revision)
+        create_revision = data.title != current_brief.title or content_changed
+
+        if create_revision:
+            revision = LegalBriefRevision(
+                brief_id=current_brief.id,
+                title=current_brief.title,
+                content=current_brief.content,
+            )
+            revision.created_by_id = current_brief.created_by_id
+            revision.created_by = current_brief.created_by
+            revision.mark_updated(current_brief.id)
+            session.add(revision)
 
         current_brief.title = data.title or current_brief.title
         current_brief.content = data.content or current_brief.content
