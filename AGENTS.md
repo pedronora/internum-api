@@ -139,6 +139,8 @@ VerifyAdmin          # role == 'admin'
 ### Legal Briefs (`internum/modules/legal_briefs/`)
 - **Models**: `LegalBrief` with revisions (versioning)
 - **Audit**: Full `AuditMixin` tracking
+- **Sanitização**: Conteúdo rico é sanitizado com `bleach` via `internum/utils/sanitize.py` (`sanitize_rich_text`); compare conteúdo por texto puro (`plain_text`) para decidir se houve mudança real
+- **Revisão**: Nova `LegalBriefRevision` é criada **apenas** quando o título ou o texto puro do conteúdo mudam — formatação pura (sem alteração de texto) não gera revisão
 
 ### Notices (`internum/modules/notices/`)
 - **Model**: `Notice` with read tracking per user
@@ -239,5 +241,6 @@ poetry run alembic upgrade head
 | `internum/core/permissions.py` | Permission dependencies |
 | `internum/core/models/registry.py` | SQLAlchemy registry |
 | `internum/core/models/mixins.py` | AuditMixin |
+| `internum/utils/sanitize.py` | Sanitização de conteúdo rico (`sanitize_rich_text`) + `plain_text` |
 | `pyproject.toml` | Dependencies, Ruff, pytest, tasks |
 | `.env.development` | Local environment variables |

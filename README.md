@@ -36,6 +36,7 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 - **PostgreSQL**
 - **Alembic**
 - **Pydantic**
+- **bleach** (sanitização de conteúdo rico)
 - **holidays**
 - **Poetry**
 - **Docker & Docker Compose**
@@ -108,7 +109,8 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 │   ├── scripts
 │   │   └── seed_admin.py
 │   └── utils
-│       └── datetime.py
+│       ├── datetime.py
+│       └── sanitize.py
 ├── migrations
 │   ├── env.py
 │   ├── README
@@ -234,21 +236,21 @@ task dockerBuild
 
 A imagem de produção fica em **GHCR**: `ghcr.io/pedronora/internum-api`.
 
-- Tag de release: `:1.0.0` (imutável, usa-se em produção)
+- Tag de release: `:1.2.0` (imutável, usa-se em produção)
 - Tag de desenvolvimento: `:latest` e `:sha-<commit>`
 - O CI (`docker-publish.yaml`) publica `latest` nos merges para `main` e `X.Y.Z` quando uma tag `vX.Y.Z` é criada.
 
 No TrueNAS:
 
-1. Use a imagem `ghcr.io/pedronora/internum-api:1.0.0` (pull direto, sem `docker save/load`).
+1. Use a imagem `ghcr.io/pedronora/internum-api:1.2.0` (pull direto, sem `docker save/load`).
 2. Crie o app usando essa imagem.
 3. Configure as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `SECRET_KEY`, `MAILTRAP_TOKEN`) ou via `env_file`.
 
 ## 🏷️ Criar uma release
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 O CI publica a imagem com o rótulo da versão no GHCR.
@@ -273,7 +275,7 @@ Observações:
 
 - library – biblioteca técnica interna (livros, empréstimos, categorias)
 
-- legal_briefs – Ementas de entendimentos jurídicos consolidados internamente
+- legal_briefs – Ementas de entendimentos jurídicos consolidados internamente (conteúdo rico sanitizado com `bleach`; revisão criada apenas quando título ou conteúdo mudam — formatação pura não gera revisão)
 
 - vacation – gestão de férias (períodos aquisitivos, concessões, solicitações e alertas)
 
