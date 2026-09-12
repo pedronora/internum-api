@@ -5,6 +5,16 @@ Todas as mudanças relevantes desta imagem serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o versionamento segue o padrão [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.3.0] - 2026-09-12
+
+### Added
+
+- Campos opcionais `phone` (String(20)) e `gross_salary` (Numeric(14,2)) no
+  cadastro de usuários e nas demais ações do CRUD (migration `b061be051fe4`).
+  Telefone é normalizado/validado no padrão brasileiro (10–13 dígitos) e
+  editável pelo próprio usuário; `gross_salary` é visível/editável apenas por
+  admin/coord (sensitive field).
+
 ## [1.2.0] - 2026-08-20
 
 ### Added
