@@ -191,6 +191,7 @@ async def update_user(
                 'active',
                 'hiring_date',
                 'termination_date',
+                'gross_salary',
             }
 
             if field in sensitive_fields and current_user.role not in {

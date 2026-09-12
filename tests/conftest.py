@@ -73,6 +73,8 @@ class UserFactory(factory.Factory):
     role = Role.USER
     setor = Setor.REGISTRO
     subsetor = 'Análise'
+    phone = None
+    gross_salary = None
 
 
 @pytest.fixture

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import Query
@@ -21,6 +22,8 @@ CPF_FIRST_WEIGHT = 10
 CPF_SECOND_WEIGHT = 11
 CPF_DIGIT_LIMIT = 10
 CPF_BASE_LENGTH = 9
+MIN_PHONE_DIGITS = 10
+MAX_PHONE_DIGITS = 13
 
 
 def validate_cpf(cpf: str) -> str:
@@ -69,6 +72,20 @@ def validate_password_complexity(pwd: str) -> str:
     return pwd
 
 
+def validate_phone(phone: str) -> str | None:
+    if not phone or not phone.strip():
+        return None
+
+    digits = ''.join(char for char in phone if char.isdigit())
+
+    if not MIN_PHONE_DIGITS <= len(digits) <= MAX_PHONE_DIGITS:
+        raise ValueError(
+            'Telefone deve conter entre 10 e 13 dígitos (DD + número).'
+        )
+
+    return digits
+
+
 class UserBase(BaseModel):
     name: str
     username: str
@@ -80,6 +97,8 @@ class UserBase(BaseModel):
     subsetor: str
     role: Role = Role.USER
     active: bool = True
+    phone: Optional[str] = None
+    gross_salary: Optional[Decimal] = Field(None, ge=0)
 
     @field_validator('email', mode='before')
     def normalize_email(cls, v):
@@ -98,6 +117,14 @@ class UserBase(BaseModel):
         if not isinstance(v, str):
             raise ValueError('CPF inválido.')
         return validate_cpf(v)
+
+    @field_validator('phone', mode='before')
+    def validate_and_normalize_phone(cls, v):
+        if v is None or not v:
+            return None
+        if not isinstance(v, str):
+            raise ValueError('Telefone inválido.')
+        return validate_phone(v)
 
 
 class UserCreate(UserBase):
@@ -151,6 +178,8 @@ class UserUpdate(BaseModel):
     subsetor: Optional[str] = Field(None, min_length=4)
     role: Optional[Role] = None
     active: Optional[bool] = None
+    phone: Optional[str] = None
+    gross_salary: Optional[Decimal] = Field(None, ge=0)
 
     @field_validator('email', mode='before')
     def normalize_email(cls, v):
@@ -171,6 +200,14 @@ class UserUpdate(BaseModel):
         if not isinstance(v, str):
             raise ValueError('CPF inválido.')
         return validate_cpf(v)
+
+    @field_validator('phone', mode='before')
+    def validate_and_normalize_phone(cls, v):
+        if v is None or not v:
+            return None
+        if not isinstance(v, str):
+            raise ValueError('Telefone inválido.')
+        return validate_phone(v)
 
     @model_validator(mode='after')
     def validate_active_termination_date(self):
