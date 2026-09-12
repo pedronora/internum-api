@@ -29,6 +29,8 @@ def test_create_user(client, mock_db_time, token_admin):
                 'role': 'user',
                 'setor': 'oficial',
                 'subsetor': 'titular',
+                'phone': '(45) 99999-9999',
+                'gross_salary': 5200.50,
             },
         )
 
@@ -42,6 +44,8 @@ def test_create_user(client, mock_db_time, token_admin):
     assert data['cpf'] == '12345678909'
     assert data['email'] == 'test@test.com'
     assert data['birthday'] == '2020-01-01'
+    assert data['phone'] == '45999999999'
+    assert data['gross_salary'] == '5200.50'
     assert data['created_at'] == time.isoformat() + 'Z'
 
 
@@ -108,6 +112,54 @@ def test_create_user_with_invalid_cpf(client, token_admin):
             'role': 'user',
             'setor': 'oficial',
             'subsetor': 'titular',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_create_user_with_invalid_phone(client, token_admin):
+    password = build_test_password()
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': password,
+            'cpf': '12345678909',
+            'email': 'test@test.com',
+            'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
+            'role': 'user',
+            'setor': 'oficial',
+            'subsetor': 'titular',
+            'phone': '(45) 123',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_create_user_with_negative_gross_salary(client, token_admin):
+    password = build_test_password()
+
+    response = client.post(
+        ENDPOINT_URL,
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json={
+            'name': 'Pedro Nora',
+            'username': 'User_1',
+            'password': password,
+            'cpf': '12345678909',
+            'email': 'test@test.com',
+            'birthday': '2020-01-01',
+            'hiring_date': '2026-02-05',
+            'role': 'user',
+            'setor': 'oficial',
+            'subsetor': 'titular',
+            'gross_salary': -1,
         },
     )
 
@@ -306,6 +358,57 @@ def test_update_user_restricted_fields_forbidden(client, user, token):
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert 'Acesso negado' in response.json()['detail']
+
+
+def test_update_gross_salary_forbidden_for_self(client, user, token):
+    update_data = {'gross_salary': 5000.00}
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert 'Acesso negado' in response.json()['detail']
+
+
+def test_update_gross_salary_by_admin(client, user, token_admin):
+    update_data = {'gross_salary': 5200.50}
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token_admin}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['gross_salary'] == '5200.50'
+
+
+def test_update_phone_by_self(client, user, token):
+    update_data = {'phone': '(45) 99999-9999'}
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['phone'] == '45999999999'
+
+
+def test_update_phone_invalid(client, user, token):
+    update_data = {'phone': '123'}
+
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers={'Authorization': f'Bearer {token}'},
+        json=update_data,
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_update_user_all_fields(client, user, token_admin):
