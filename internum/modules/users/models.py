@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, String, func
+from sqlalchemy import Boolean, Date, DateTime, Numeric, String, func
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +32,13 @@ class User:
     hiring_date: Mapped[date] = mapped_column(Date, nullable=False)
     termination_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, init=False
+    )
+
+    phone: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None
+    )
+    gross_salary: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 2), nullable=True, default=None
     )
 
     role: Mapped[Role] = mapped_column(
