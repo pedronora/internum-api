@@ -1,37 +1,48 @@
 from http import HTTPStatus
 from uuid import uuid4
 
+from internum.modules.users.enums import Role
 from internum.modules.users.models import User
 from internum.modules.users.schemas import UserRead
 
 ENDPOINT_URL = '/api/v1/users'
+GROSS_SALARY = 5200.50
 
 
 def build_test_password() -> str:
     return f'Aa1!{uuid4().hex[:8]}'
 
 
-def test_create_user(client, mock_db_time, token_admin):
-    password = build_test_password()
+def build_payload(**overrides) -> dict:
+    payload = {
+        'name': 'Pedro Nora',
+        'username': 'User_1',
+        'password': build_test_password(),
+        'cpf': '123.456.789-09',
+        'email': 'TEST@test.com',
+        'birthday': '2020-01-01',
+        'hiring_date': '2026-02-05',
+        'unidade': 'registro',
+        'subunidade': 'Análise',
+        'roles': ['colaborador_registro'],
+    }
+    payload.update(overrides)
+    return payload
 
+
+def auth(token: str) -> dict:
+    return {'Authorization': f'Bearer {token}'}
+
+
+def test_create_user(client, mock_db_time, token_admin):
     with mock_db_time(model=User) as time:
         response = client.post(
             ENDPOINT_URL,
-            headers={'Authorization': f'Bearer {token_admin}'},
-            json={
-                'name': 'Pedro Nora',
-                'username': 'User_1',
-                'password': password,
-                'cpf': '123.456.789-09',
-                'email': 'TEST@test.com',
-                'birthday': '2020-01-01',
-                'hiring_date': '2026-02-05',
-                'role': 'user',
-                'setor': 'oficial',
-                'subsetor': 'titular',
-                'phone': '(45) 99999-9999',
-                'gross_salary': 5200.50,
-            },
+            headers=auth(token_admin),
+            json=build_payload(
+                phone='(45) 99999-9999',
+                gross_salary=GROSS_SALARY,
+            ),
         )
 
     data = response.json()
@@ -44,29 +55,20 @@ def test_create_user(client, mock_db_time, token_admin):
     assert data['cpf'] == '12345678909'
     assert data['email'] == 'test@test.com'
     assert data['birthday'] == '2020-01-01'
+    assert data['unidade'] == 'registro'
+    assert data['subunidade'] == 'Análise'
+    assert data['roles'] == ['colaborador_registro']
     assert data['phone'] == '45999999999'
-    assert data['gross_salary'] == '5200.50'
+    assert data['gross_salary'] is not None
+    assert float(data['gross_salary']) == GROSS_SALARY
     assert data['created_at'] == time.isoformat() + 'Z'
 
 
-def test_create_user_without_permission(client, mock_db_time, token):
-    password = build_test_password()
-
+def test_create_user_without_permission(client, token):
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'cpf': '12345678909',
-            'email': 'test@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'user',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-        },
+        headers=auth(token),
+        json=build_payload(),
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
@@ -74,93 +76,41 @@ def test_create_user_without_permission(client, mock_db_time, token):
 
 
 def test_create_user_without_cpf(client, token_admin):
-    password = build_test_password()
+    payload = build_payload()
+    payload.pop('cpf')
 
     response = client.post(
-        ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'email': 'test@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'user',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-        },
+        ENDPOINT_URL, headers=auth(token_admin), json=payload
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_create_user_with_invalid_cpf(client, token_admin):
-    password = build_test_password()
-
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'cpf': '11111111111',
-            'email': 'test@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'user',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-        },
+        headers=auth(token_admin),
+        json=build_payload(cpf='11111111111'),
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_create_user_with_invalid_phone(client, token_admin):
-    password = build_test_password()
-
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'cpf': '12345678909',
-            'email': 'test@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'user',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-            'phone': '(45) 123',
-        },
+        headers=auth(token_admin),
+        json=build_payload(phone='(45) 123'),
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_create_user_with_negative_gross_salary(client, token_admin):
-    password = build_test_password()
-
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'cpf': '12345678909',
-            'email': 'test@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'user',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-            'gross_salary': -1,
-        },
+        headers=auth(token_admin),
+        json=build_payload(gross_salary=-1),
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -169,19 +119,13 @@ def test_create_user_with_negative_gross_salary(client, token_admin):
 def test_create_user_with_existent_username(client, user, token_admin):
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': user.name,
-            'username': user.username,
-            'password': user.clean_password,
-            'cpf': '12345678909',
-            'email': 'other@mail.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'setor': user.setor,
-            'subsetor': user.subsetor,
-            'role': user.role,
-        },
+        headers=auth(token_admin),
+        json=build_payload(
+            name=user.name,
+            username=user.username,
+            email='other@mail.com',
+            cpf='12345678909',
+        ),
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -191,68 +135,108 @@ def test_create_user_with_existent_username(client, user, token_admin):
 def test_create_user_with_existent_email(client, user, token_admin):
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json={
-            'name': user.name,
-            'username': 'new_username',
-            'password': user.clean_password,
-            'cpf': '12345678909',
-            'email': user.email,
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'setor': user.setor,
-            'subsetor': user.subsetor,
-            'role': user.role,
-        },
+        headers=auth(token_admin),
+        json=build_payload(
+            username='new_username',
+            email=user.email,
+            cpf='12345678909',
+        ),
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
     assert response.json()['detail'] == 'Email já existente.'
 
 
-def test_create_admin_by_coord(client, mock_db_time, token_coord):
-    password = build_test_password()
-
+def test_create_admin_by_coord(client, token_coord):
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_coord}'},
-        json={
-            'name': 'Pedro Nora',
-            'username': 'User_1',
-            'password': password,
-            'cpf': '123.456.789-09',
-            'email': 'TEST@test.com',
-            'birthday': '2020-01-01',
-            'hiring_date': '2026-02-05',
-            'role': 'admin',
-            'setor': 'oficial',
-            'subsetor': 'titular',
-        },
+        headers=auth(token_coord),
+        json=build_payload(roles=['admin']),
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == (
-        'Acesso negado: Somente administradores podem '
-        'atribuir o perfil de administrador.'
+        'Acesso negado: você não pode atribuir este perfil.'
+    )
+
+
+def test_create_user_by_coord(client, token_coord):
+    response = client.post(
+        ENDPOINT_URL,
+        headers=auth(token_coord),
+        json=build_payload(email='coord-created@test.com'),
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()['roles'] == ['colaborador_registro']
+
+
+def test_create_gestao_coord_by_coord_gestao(client, token_coord_gestao):
+    response = client.post(
+        ENDPOINT_URL,
+        headers=auth(token_coord_gestao),
+        json=build_payload(roles=['coord_gestao']),
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == (
+        'Acesso negado: você não pode atribuir este perfil.'
+    )
+
+
+def test_create_non_admin_role_by_oficial(client, token_oficial):
+    response = client.post(
+        ENDPOINT_URL,
+        headers=auth(token_oficial),
+        json=build_payload(roles=['suboficial']),
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()['roles'] == ['suboficial']
+
+
+def test_create_with_salary_by_coord_forbidden(client, token_coord):
+    response = client.post(
+        ENDPOINT_URL,
+        headers=auth(token_coord),
+        json=build_payload(gross_salary=5000),
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == (
+        'Acesso negado: sem permissão para definir salário.'
     )
 
 
 def test_get_users(client, token_admin):
-    response = client.get(
-        ENDPOINT_URL, headers={'Authorization': f'Bearer {token_admin}'}
-    )
+    response = client.get(ENDPOINT_URL, headers=auth(token_admin))
 
     assert response.status_code == HTTPStatus.OK
     assert len(response.json()['users']) > 0
+    assert 'cpf' in response.json()['users'][0]
+    assert 'gross_salary' in response.json()['users'][0]
 
 
 def test_get_users_without_permissions(client, token):
-    response = client.get(
-        ENDPOINT_URL, headers={'Authorization': f'Bearer {token}'}
-    )
+    response = client.get(ENDPOINT_URL, headers=auth(token))
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
+
+
+def test_get_user_directory(client, user, token):
+    response = client.get(ENDPOINT_URL + '/directory', headers=auth(token))
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    directory_user = next(
+        item for item in data['users'] if item['id'] == user.id
+    )
+    assert directory_user['name'] == user.name
+    assert directory_user['roles'] == ['colaborador_registro']
+    assert 'cpf' not in directory_user
+    assert 'gross_salary' not in directory_user
+    assert 'birthday' not in directory_user
 
 
 def test_get_user(client, user, token):
@@ -260,19 +244,38 @@ def test_get_user(client, user, token):
 
     response = client.get(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers=auth(token),
     )
 
     assert response.status_code == HTTPStatus.OK
-
     assert response.json() == expected_data
     assert 'termination_date' in response.json()
+
+
+def test_get_other_user_without_sensitive_permission(
+    client, user, other_user, token
+):
+    response = client.get(
+        f'{ENDPOINT_URL}/{other_user.id}',
+        headers=auth(token),
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_get_other_user_as_coord(client, user, other_user, token_coord):
+    response = client.get(
+        f'{ENDPOINT_URL}/{other_user.id}',
+        headers=auth(token_coord),
+    )
+
+    assert response.status_code == HTTPStatus.OK
 
 
 def test_get_user_by_id_not_found(client, token_admin):
     response = client.get(
         f'{ENDPOINT_URL}/999999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers=auth(token_admin),
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -284,7 +287,7 @@ def test_get_user_by_id_not_found(client, token_admin):
 def test_get_user_by_id_inactive(client, user_inactive, token_admin):
     response = client.get(
         f'{ENDPOINT_URL}/{user_inactive.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers=auth(token_admin),
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -294,16 +297,24 @@ def test_get_user_by_id_inactive(client, user_inactive, token_admin):
     )
 
 
-def test_update_user_success(client, user, token):
-    update_data = {
-        'name': 'Novo Nome',
-        'email': 'novo.email@test.com',
-    }
+def test_get_me_includes_roles_and_permissions(client, token):
+    response = client.get(ENDPOINT_URL + '/me', headers=auth(token))
 
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert data['roles'] == ['colaborador_registro']
+    assert 'users:read' in data['permissions']
+    assert 'users:read_sensitive' not in data['permissions']
+
+
+def test_update_user_success(client, user, token):
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={
+            'name': 'Novo Nome',
+            'email': 'novo.email@test.com',
+        },
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -314,14 +325,10 @@ def test_update_user_success(client, user, token):
 
 
 def test_update_email_upper_char(client, user, token):
-    update_data = {
-        'email': 'NOVO.email@test.com',
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'email': 'NOVO.email@test.com'},
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -329,12 +336,10 @@ def test_update_email_upper_char(client, user, token):
 
 
 def test_update_user_partial_data(client, user, token):
-    update_data = {'name': 'Nome Parcial'}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'name': 'Nome Parcial'},
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -344,55 +349,70 @@ def test_update_user_partial_data(client, user, token):
 
 
 def test_update_user_restricted_fields_forbidden(client, user, token):
-    update_data = {
-        'subsetor': 'Novo Subsetor',
-        'role': 'admin',
-        'active': False,
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={
+            'subunidade': 'Outra',
+            'roles': ['admin'],
+            'active': False,
+        },
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert 'Acesso negado' in response.json()['detail']
 
 
-def test_update_gross_salary_forbidden_for_self(client, user, token):
-    update_data = {'gross_salary': 5000.00}
-
+def test_update_own_salary_forbidden(client, user, token):
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'gross_salary': 5000.00},
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert 'Acesso negado' in response.json()['detail']
+
+
+def test_update_own_roles_forbidden(client, user, token):
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers=auth(token),
+        json={'roles': ['admin']},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.json()['detail'] == (
+        'Acesso negado: você não pode alterar seus perfis.'
+    )
 
 
 def test_update_gross_salary_by_admin(client, user, token_admin):
-    update_data = {'gross_salary': 5200.50}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json=update_data,
+        headers=auth(token_admin),
+        json={'gross_salary': GROSS_SALARY},
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()['gross_salary'] == '5200.50'
+    assert float(response.json()['gross_salary']) == GROSS_SALARY
+
+
+def test_update_gross_salary_by_coord_forbidden(client, user, token_coord):
+    response = client.put(
+        f'{ENDPOINT_URL}/{user.id}',
+        headers=auth(token_coord),
+        json={'gross_salary': 5200.50},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_update_phone_by_self(client, user, token):
-    update_data = {'phone': '(45) 99999-9999'}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'phone': '(45) 99999-9999'},
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -400,35 +420,31 @@ def test_update_phone_by_self(client, user, token):
 
 
 def test_update_phone_invalid(client, user, token):
-    update_data = {'phone': '123'}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'phone': '123'},
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_update_user_all_fields(client, user, token_admin):
-    update_data = {
-        'name': 'Nome Completo',
-        'username': 'novousername',
-        'cpf': '529.982.247-25',
-        'email': 'novo@email.com',
-        'hiring_date': '2026-01-01',
-        'termination_date': '2026-02-01',
-        'setor': 'administrativo',
-        'subsetor': 'Desenvolvimento',
-        'role': 'admin',
-        'active': False,
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json=update_data,
+        headers=auth(token_admin),
+        json={
+            'name': 'Nome Completo',
+            'username': 'novousername',
+            'cpf': '529.982.247-25',
+            'email': 'novo@email.com',
+            'hiring_date': '2026-01-01',
+            'termination_date': '2026-02-01',
+            'unidade': 'gestao',
+            'subunidade': 'Desenvolvimento',
+            'roles': ['admin'],
+            'active': False,
+        },
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -439,83 +455,70 @@ def test_update_user_all_fields(client, user, token_admin):
     assert data['email'] == 'novo@email.com'
     assert data['hiring_date'] == '2026-01-01'
     assert data['termination_date'] == '2026-02-01'
-    assert data['setor'] == 'administrativo'
-    assert data['subsetor'] == 'Desenvolvimento'
-    assert data['role'] == 'admin'
+    assert data['unidade'] == 'gestao'
+    assert data['subunidade'] == 'Desenvolvimento'
+    assert data['roles'] == ['admin']
     assert not data['active']
 
 
 def test_update_user_reject_termination_date_when_active(
     client, user, token_admin
 ):
-    update_data = {
-        'active': True,
-        'termination_date': '2026-02-01',
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json=update_data,
+        headers=auth(token_admin),
+        json={
+            'active': True,
+            'termination_date': '2026-02-01',
+        },
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_update_role_to_admin_by_coord(client, user, token_coord):
-    update_data = {'role': 'admin'}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token_coord}'},
-        json=update_data,
+        headers=auth(token_coord),
+        json={'roles': ['admin']},
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == (
-        'Acesso negado: Somente administradores podem '
-        'atribuir o perfil de administrador.'
+        'Acesso negado: você não pode atribuir este perfil.'
     )
 
 
 def test_update_user_empty_payload(client, user, token):
-    original_name = user.name
-    original_email = user.email
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers=auth(token),
         json={},
     )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
-    assert data['name'] == original_name
-    assert data['email'] == original_email
+    assert data['name'] == user.name
+    assert data['email'] == user.email
 
 
 def test_update_user_with_none_values(client, user, token):
-    original_name = user.name
-    update_data = {'name': None, 'email': 'outro@email.com'}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'name': None, 'email': 'outro@email.com'},
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()['name'] == original_name
+    assert response.json()['name'] == user.name
     assert response.json()['email'] == 'outro@email.com'
 
 
 def test_update_user_not_found(client, token_admin):
-    update_data = {'name': 'Novo Nome'}
-
     response = client.put(
         f'{ENDPOINT_URL}/9999',
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json=update_data,
+        headers=auth(token_admin),
+        json={'name': 'Novo Nome'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -523,24 +526,20 @@ def test_update_user_not_found(client, token_admin):
 
 
 def test_update_user_inactive(client, user_inactive, token):
-    update_data = {'name': 'Novo Nome'}
     response = client.put(
-        f'/users/{user_inactive.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        f'{ENDPOINT_URL}/{user_inactive.id}',
+        headers=auth(token),
+        json={'name': 'Novo Nome'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_update_user_duplicate_username(
-    client, session, user, other_user, token
-):
-    update_data = {'username': other_user.username}
+def test_update_user_duplicate_username(client, user, other_user, token):
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'username': other_user.username},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -550,12 +549,11 @@ def test_update_user_duplicate_username(
     )
 
 
-def test_update_user_duplicate_email(client, session, user, other_user, token):
-    update_data = {'email': other_user.email}
+def test_update_user_duplicate_email(client, user, other_user, token):
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'email': other_user.email},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -565,12 +563,11 @@ def test_update_user_duplicate_email(client, session, user, other_user, token):
     )
 
 
-def test_update_user_duplicate_cpf(client, user, other_user, token):
-    update_data = {'cpf': other_user.cpf}
+def test_update_user_duplicate_cpf(client, user, other_user, token_admin):
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token_admin),
+        json={'cpf': other_user.cpf},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -581,42 +578,38 @@ def test_update_user_duplicate_cpf(client, user, other_user, token):
 
 
 def test_update_user_invalid_data(client, user, token):
-    update_data = {
-        'email': 'email-invalido',
-        'name': '',
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={
+            'email': 'email-invalido',
+            'name': '',
+        },
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_update_user_same_data(client, user, token):
-    update_data = {
-        'name': user.name,
-        'email': user.email,
-    }
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={
+            'name': user.name,
+            'email': user.email,
+        },
     )
+
     assert response.status_code == HTTPStatus.OK
 
 
 def test_update_user_case_sensitivity_email(client, user, token):
-    update_data = {'email': user.email.upper()}
-
     response = client.put(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
-        json=update_data,
+        headers=auth(token),
+        json={'email': user.email.upper()},
     )
+
     assert response.status_code == HTTPStatus.OK
     assert response.json()['email'] == user.email.upper().lower()
 
@@ -624,7 +617,7 @@ def test_update_user_case_sensitivity_email(client, user, token):
 def test_deactivate_user_success(client, user, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers=auth(token_admin),
     )
 
     assert response.status_code == HTTPStatus.NO_CONTENT
@@ -634,7 +627,7 @@ def test_deactivate_user_success(client, user, token_admin):
 def test_deactivate_user_without_permission(client, user, token):
     response = client.delete(
         f'{ENDPOINT_URL}/{user.id}',
-        headers={'Authorization': f'Bearer {token}'},
+        headers=auth(token),
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
@@ -644,7 +637,7 @@ def test_deactivate_user_without_permission(client, user, token):
 def test_deactivate_user_not_found(client, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/9999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers=auth(token_admin),
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -654,7 +647,7 @@ def test_deactivate_user_not_found(client, token_admin):
 def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
     response = client.delete(
         f'{ENDPOINT_URL}/{user_inactive.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers=auth(token_admin),
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -664,16 +657,35 @@ def test_deactivate_user_already_inactive(client, user_inactive, token_admin):
     )
 
 
-def test_user_change_pwd(client, user, token):
-    data = {
-        'old_password': user.clean_password,
-        'new_password': build_test_password(),
-    }
+def test_deactivate_self_forbidden(client, user_coord, token_coord):
+    response = client.delete(
+        f'{ENDPOINT_URL}/{user_coord.id}',
+        headers=auth(token_coord),
+    )
 
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_deactivate_last_admin_forbidden(client, user_admin, token_oficial):
+    response = client.delete(
+        f'{ENDPOINT_URL}/{user_admin.id}',
+        headers=auth(token_oficial),
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert response.json()['detail'] == (
+        'Não é possível remover o último administrador ativo.'
+    )
+
+
+def test_user_change_pwd(client, user, token):
     response = client.post(
         f'{ENDPOINT_URL}/{user.id}/change-password',
-        headers={'Authorization': f'Bearer {token}'},
-        json=data,
+        headers=auth(token),
+        json={
+            'old_password': user.clean_password,
+            'new_password': build_test_password(),
+        },
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -681,14 +693,13 @@ def test_user_change_pwd(client, user, token):
 
 
 def test_user_change_with_same_pwd(client, user, token):
-    data = {
-        'old_password': user.clean_password,
-        'new_password': user.clean_password,
-    }
     response = client.post(
         f'{ENDPOINT_URL}/{user.id}/change-password',
-        headers={'Authorization': f'Bearer {token}'},
-        json=data,
+        headers=auth(token),
+        json={
+            'old_password': user.clean_password,
+            'new_password': user.clean_password,
+        },
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -696,14 +707,13 @@ def test_user_change_with_same_pwd(client, user, token):
 
 
 def test_change_pwd_user_not_found(client, token_admin):
-    data = {
-        'old_password': build_test_password(),
-        'new_password': build_test_password(),
-    }
     response = client.post(
         f'{ENDPOINT_URL}/9999/change-password',
-        headers={'Authorization': f'Bearer {token_admin}'},
-        json=data,
+        headers=auth(token_admin),
+        json={
+            'old_password': build_test_password(),
+            'new_password': build_test_password(),
+        },
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -713,9 +723,32 @@ def test_change_pwd_user_not_found(client, token_admin):
 def test_change_pwd_without_permission(client, user, other_user, token):
     response = client.post(
         f'{ENDPOINT_URL}/{other_user.id}/change-password',
-        headers={'Authorization': f'Bearer {token}'},
-        json={'password': user.clean_password},
+        headers=auth(token),
+        json={
+            'old_password': user.clean_password,
+            'new_password': build_test_password(),
+        },
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()['detail'] == 'Acesso negado: usuário sem permissão'
+
+
+def test_admin_change_other_user_password(client, other_user, token_admin):
+    response = client.post(
+        f'{ENDPOINT_URL}/{other_user.id}/change-password',
+        headers=auth(token_admin),
+        json={
+            'old_password': other_user.clean_password,
+            'new_password': build_test_password(),
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_role_is_job_not_permission_source(client, user, token):
+    response = client.get(ENDPOINT_URL + '/me', headers=auth(token))
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['roles'] == [Role.COLABORADOR_REGISTRO.value]

@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from internum.core.database import get_session
 from internum.core.security import get_password_hash
 from internum.core.settings import Settings
-from internum.modules.users.enums import Role, Setor
-from internum.modules.users.models import User
+from internum.modules.users.enums import Role, Unidade
+from internum.modules.users.models import User, UserRole
 
 settings = Settings()
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -22,15 +22,17 @@ async def create_admin(session: Session):
         cpf=settings.ADMIN_CPF,
         birthday=settings.ADMIN_BIRTHDAY,
         password=get_password_hash(settings.ADMIN_PASSWORD),
-        role=Role.ADMIN,
-        setor=Setor.ADMINISTRATIVO,
-        subsetor='Apoio',
+        unidade=Unidade.GESTAO,
         hiring_date=settings.ADMIN_HIRING_DATE or settings.ADMIN_BIRTHDAY,
     )
 
     session.add(admin)
+    await session.flush()
+    session.add(
+        UserRole(user_id=admin.id, role=Role.ADMIN, granted_by_id=admin.id)
+    )
     await session.commit()
-    await session.refresh(admin)
+    await session.refresh(admin, ['role_assignments'])
 
     print(f'Usuário {admin.name} criado com sucesso!')
 

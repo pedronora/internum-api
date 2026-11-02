@@ -6,24 +6,31 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from internum.core.database import get_session
-from internum.core.permissions import (
-    CurrentUser,
-    VerifyAdminCoord,
-    VerifySelfAdmin,
-    VerifySelfAdminCoord,
+from internum.core.authorization import (
+    Permission,
+    can_assign_role,
+    has_permission,
+    is_admin,
+    permissions_for_roles,
 )
+from internum.core.database import get_session
+from internum.core.permissions import DENIED, CurrentUser, require_permission
 from internum.core.security import get_password_hash, verify_password
-from internum.modules.users.models import User
+from internum.modules.users.enums import Role
+from internum.modules.users.models import User, UserRole
 from internum.modules.users.schemas import (
     Message,
     PageMeta,
+    PaginatedUserDirectory,
     PaginatedUserList,
     UserChangePassword,
     UserCreate,
+    UserPublic,
     UserQueryParams,
     UserRead,
+    UserSelf,
     UserUpdate,
 )
 
@@ -31,13 +38,186 @@ router = APIRouter(prefix='/users', tags=['Users'])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
+CanCreateUser = Annotated[
+    UserRead, Depends(require_permission(Permission.USERS_CREATE))
+]
+CanReadSensitive = Annotated[
+    UserRead, Depends(require_permission(Permission.USERS_READ_SENSITIVE))
+]
+CanReadDirectory = Annotated[
+    UserRead, Depends(require_permission(Permission.USERS_READ))
+]
+CanEditEmployment = Annotated[
+    UserRead, Depends(require_permission(Permission.USERS_EDIT_EMPLOYMENT))
+]
+
+SELF_EDITABLE_FIELDS = {
+    'name',
+    'username',
+    'email',
+    'birthday',
+    'phone',
+}
+
+FIELD_PERMISSIONS = {
+    'name': Permission.USERS_EDIT_PROFILE,
+    'username': Permission.USERS_EDIT_PROFILE,
+    'cpf': Permission.USERS_EDIT_PROFILE,
+    'email': Permission.USERS_EDIT_PROFILE,
+    'birthday': Permission.USERS_EDIT_PROFILE,
+    'phone': Permission.USERS_EDIT_PROFILE,
+    'unidade': Permission.USERS_EDIT_EMPLOYMENT,
+    'subunidade': Permission.USERS_EDIT_EMPLOYMENT,
+    'hiring_date': Permission.USERS_EDIT_EMPLOYMENT,
+    'termination_date': Permission.USERS_EDIT_EMPLOYMENT,
+    'active': Permission.USERS_EDIT_EMPLOYMENT,
+    'gross_salary': Permission.USERS_EDIT_SALARY,
+}
+
+
+def _build_meta(total: int, limit: int, offset: int) -> PageMeta:
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    page = (offset // limit) + 1 if limit > 0 else 1
+    return PageMeta(
+        total=total,
+        page=page,
+        size=limit,
+        total_pages=total_pages,
+        has_next=(offset + limit) < total,
+        has_prev=offset > 0,
+        offset=offset,
+    )
+
+
+async def _load_active_user(session: Session, user_id: int) -> User:
+    db_user = await session.scalar(
+        select(User)
+        .options(selectinload(User.role_assignments))
+        .where((User.id == user_id) & User.active)
+    )
+    if not db_user:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'Não encontrado usuário com id ({user_id}).',
+        )
+    return db_user
+
+
+def _ensure_can_assign_roles(
+    actor: UserRead, requested_roles: set[Role]
+) -> None:
+    if not has_permission(actor.roles, Permission.USERS_ASSIGN_ROLES):
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
+
+    for role in requested_roles:
+        if not can_assign_role(actor.roles, role):
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN,
+                detail='Acesso negado: você não pode atribuir este perfil.',
+            )
+
+
+async def _ensure_not_last_active_admin(
+    session: Session, db_user: User
+) -> None:
+    admins = (
+        await session.scalar(
+            select(func.count())
+            .select_from(User)
+            .join(UserRole, UserRole.user_id == User.id)
+            .where(
+                User.active,
+                UserRole.role == Role.ADMIN,
+                User.id != db_user.id,
+            )
+        )
+        or 0
+    )
+    if admins == 0:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Não é possível remover o último administrador ativo.',
+        )
+
+
+def _serialize_self(user: User) -> UserSelf:
+    data = UserSelf.model_validate(user)
+    data.permissions = sorted(
+        permissions_for_roles(user.roles), key=lambda item: item.value
+    )
+    return data
+
+
+def _apply_field_updates(
+    actor: UserRead, db_user: User, update_data: dict, is_self: bool
+) -> None:
+    for field, value in update_data.items():
+        if value is None:
+            continue
+
+        if field in SELF_EDITABLE_FIELDS and is_self:
+            setattr(db_user, field, value)
+            continue
+
+        if not has_permission(actor.roles, FIELD_PERMISSIONS[field]):
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN,
+                detail='Acesso negado: sem permissão para alterar este campo.',
+            )
+
+        setattr(db_user, field, value)
+
+
+async def _apply_role_updates(
+    session: Session,
+    actor: UserRead,
+    db_user: User,
+    requested_roles: list[Role],
+    is_self: bool,
+) -> None:
+    if is_self:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Acesso negado: você não pode alterar seus perfis.',
+        )
+
+    requested = set(requested_roles)
+    current = set(db_user.roles)
+    _ensure_can_assign_roles(actor, requested ^ current)
+
+    if Role.ADMIN in current - requested and db_user.active:
+        await _ensure_not_last_active_admin(session, db_user)
+
+    for assignment in list(db_user.role_assignments):
+        if assignment.role not in requested:
+            db_user.role_assignments.remove(assignment)
+
+    for role in requested - current:
+        db_user.role_assignments.append(
+            UserRole(
+                user_id=db_user.id,
+                role=role,
+                granted_by_id=actor.id,
+            )
+        )
+
 
 @router.post('/', status_code=HTTPStatus.CREATED, response_model=UserRead)
 async def create_user(
     session: Session,
     user: UserCreate,
-    current_user: VerifyAdminCoord,
+    current_user: CanCreateUser,
 ):
+    _ensure_can_assign_roles(current_user, set(user.roles))
+
+    if user.gross_salary is not None and not has_permission(
+        current_user.roles, Permission.USERS_EDIT_SALARY
+    ):
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Acesso negado: sem permissão para definir salário.',
+        )
+
     db_user = await session.scalar(
         select(User).where(
             (User.username == user.username)
@@ -63,22 +243,32 @@ async def create_user(
                 detail='CPF já existente.',
             )
 
-    data = user.model_dump()
+    data = user.model_dump(exclude={'roles'})
     data['password'] = get_password_hash(data['password'])
 
-    if data['role'] == 'admin' and current_user.role != 'admin':
+    db_user = User(**data)
+    session.add(db_user)
+
+    try:
+        await session.flush()
+        for role in set(user.roles):
+            session.add(
+                UserRole(
+                    user_id=db_user.id,
+                    role=role,
+                    granted_by_id=current_user.id,
+                )
+            )
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
         raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='Acesso negado: Somente administradores podem '
-            'atribuir o perfil de administrador.',
+            status_code=HTTPStatus.CONFLICT,
+            detail='Username, Email ou CPF já existem.',
         )
 
-    db_user = User(**data)
-
-    session.add(db_user)
-    await session.commit()
     await session.refresh(db_user)
-
+    await session.refresh(db_user, ['role_assignments'])
     return db_user
 
 
@@ -86,81 +276,75 @@ async def create_user(
 async def read_users(
     session: Session,
     params: Annotated[UserQueryParams, Depends()],
-    current_user: VerifyAdminCoord,
+    current_user: CanReadSensitive,
 ):
+    return await _paginated_users(session, params, UserRead)
+
+
+@router.get('/directory', response_model=PaginatedUserDirectory)
+async def read_user_directory(
+    session: Session,
+    params: Annotated[UserQueryParams, Depends()],
+    current_user: CanReadDirectory,
+):
+    return await _paginated_users(session, params, UserPublic)
+
+
+async def _paginated_users(session: Session, params: UserQueryParams, schema):
     limit = max(1, params.limit)
     offset = max(0, params.offset)
-    search = params.search
 
     filters = [User.active]
 
-    if search:
-        search_pattern = f'%{search}%'
-
-        search_filters = or_(
-            User.name.ilike(search_pattern),
-            User.username.ilike(search_pattern),
-            User.email.ilike(search_pattern),
+    if params.search:
+        search_pattern = f'%{params.search}%'
+        filters.append(
+            or_(
+                User.name.ilike(search_pattern),
+                User.username.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+            )
         )
 
-        filters.append(search_filters)
-
-    total: int = (
+    total = (
         await session.scalar(
             select(func.count()).select_from(User).where(*filters)
         )
-        | 0
+        or 0
     )
 
-    query = await session.scalars(
-        select(User)
-        .where(*filters)
-        .order_by(User.name)
-        .offset(offset)
-        .limit(limit)
-    )
-    users = query.all()
+    users = (
+        await session.scalars(
+            select(User)
+            .options(selectinload(User.role_assignments))
+            .where(*filters)
+            .order_by(User.name)
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
 
-    total_pages = math.ceil(total / limit) if limit > 0 else 1
-    page = (offset // limit) + 1 if limit > 0 else 1
-    has_next = (offset + limit) < total
-    has_prev = offset > 0
-
-    meta = PageMeta(
-        total=total,
-        page=page,
-        size=limit,
-        total_pages=total_pages,
-        has_next=has_next,
-        has_prev=has_prev,
-        offset=offset,
-    )
-
-    return {'meta': meta, 'users': users}
+    meta = _build_meta(total, limit, offset)
+    return {'meta': meta, 'users': [schema.model_validate(u) for u in users]}
 
 
-@router.get('/me', response_model=UserRead)
-async def get_current_user_data(session: Session, current_user: CurrentUser):
-    return current_user
+@router.get('/me', response_model=UserSelf)
+async def get_current_user_data(current_user: CurrentUser):
+    return _serialize_self(current_user)
 
 
 @router.get('/{user_id}', response_model=UserRead)
 async def get_user_by_id(
     user_id: int,
     session: Session,
-    current_user: VerifySelfAdminCoord,
+    current_user: CurrentUser,
 ):
-    db_user = await session.scalar(
-        select(User).where((User.id == user_id) & (User.active))
-    )
+    if current_user.id != user_id and not has_permission(
+        current_user.roles, Permission.USERS_READ_SENSITIVE
+    ):
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
 
-    if not db_user:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Não encontrado usuário com id ({user_id}).',
-        )
-
-    return db_user
+    return await _load_active_user(session, user_id)
 
 
 @router.put('/{user_id}', response_model=UserRead, status_code=HTTPStatus.OK)
@@ -168,61 +352,37 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     session: Session,
-    current_user: VerifySelfAdminCoord,
+    current_user: CurrentUser,
 ):
-    db_user = await session.scalar(
-        select(User).where((User.id == user_id) & (User.active))
-    )
+    db_user = await _load_active_user(session, user_id)
+    is_self = db_user.id == current_user.id
 
-    if not db_user:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f'Não encontrado usuário com id ({user_id}).',
-        )
+    if not is_self and not has_permission(
+        current_user.roles, Permission.USERS_EDIT_PROFILE
+    ):
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
 
     update_data = user_data.model_dump(exclude_unset=True)
+    requested_roles = update_data.pop('roles', None)
 
-    for field, value in update_data.items():
-        if value is not None and hasattr(db_user, field):
-            sensitive_fields = {
-                'role',
-                'setor',
-                'subsetor',
-                'active',
-                'hiring_date',
-                'termination_date',
-                'gross_salary',
-            }
-
-            if field in sensitive_fields and current_user.role not in {
-                'admin',
-                'coord',
-            }:
-                raise HTTPException(
-                    status_code=HTTPStatus.FORBIDDEN,
-                    detail='Acesso negado: sem permissão para alterar campos '
-                    'administrativos.',
-                )
-
-            if (
-                field == 'role'
-                and value == 'admin'
-                and current_user.role != 'admin'
-            ):
-                raise HTTPException(
-                    status_code=HTTPStatus.FORBIDDEN,
-                    detail='Acesso negado: Somente administradores podem '
-                    'atribuir o perfil de administrador.',
-                )
-
-            setattr(db_user, field, value)
+    _apply_field_updates(current_user, db_user, update_data, is_self)
 
     if update_data.get('active') is True:
         db_user.termination_date = None
 
+    if requested_roles is not None:
+        await _apply_role_updates(
+            session, current_user, db_user, requested_roles, is_self
+        )
+
+    if update_data.get('active') is False:
+        if Role.ADMIN in db_user.roles:
+            await _ensure_not_last_active_admin(session, db_user)
+
     try:
         await session.commit()
         await session.refresh(db_user)
+        await session.refresh(db_user, ['role_assignments'])
         return db_user
 
     except IntegrityError:
@@ -231,19 +391,13 @@ async def update_user(
             status_code=HTTPStatus.CONFLICT,
             detail='Username, Email ou CPF já existem.',
         )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f'Erro interno ao atualizar usuário: {str(e)}',
-        )
 
 
 @router.delete('/{user_id}', status_code=HTTPStatus.NO_CONTENT)
 async def deactivate_user(
     user_id: int,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanEditEmployment,
 ):
     db_user = await session.scalar(select(User).where(User.id == user_id))
 
@@ -253,11 +407,20 @@ async def deactivate_user(
             detail=f'Não encontrado usuário com id ({user_id}).',
         )
 
+    if db_user.id == current_user.id:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Não é possível desativar o próprio usuário.',
+        )
+
     if not db_user.active:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=f'Usuário com id ({user_id}) já está inativo.',
         )
+
+    if Role.ADMIN in db_user.roles:
+        await _ensure_not_last_active_admin(session, db_user)
 
     db_user.active = False
     await session.commit()
@@ -272,8 +435,11 @@ async def change_password(
     user_id: int,
     passwords: UserChangePassword,
     session: Session,
-    current_user: VerifySelfAdmin,
+    current_user: CurrentUser,
 ):
+    if current_user.id != user_id and not is_admin(current_user.roles):
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
+
     db_user = await session.scalar(select(User).where(User.id == user_id))
 
     if not db_user:
