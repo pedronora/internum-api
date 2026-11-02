@@ -14,8 +14,8 @@ from internum.app import app
 from internum.core.database import get_session
 from internum.core.models.registry import table_registry
 from internum.core.security import create_access_token, get_password_hash
-from internum.modules.users.enums import Role, Setor
-from internum.modules.users.models import User
+from internum.modules.users.enums import Role, Unidade
+from internum.modules.users.models import User, UserRole
 
 CPF_LENGTH = 11
 CPF_BASE_LENGTH = 9
@@ -70,11 +70,30 @@ class UserFactory(factory.Factory):
         date_start=date(2023, 1, 18),
         date_end=date(2026, 2, 5),
     )
-    role = Role.USER
-    setor = Setor.REGISTRO
-    subsetor = 'Análise'
+    unidade = Unidade.REGISTRO
+    subunidade = 'Análise'
     phone = None
     gross_salary = None
+
+
+async def create_user_with_role(
+    session,
+    role: Role = Role.COLABORADOR_REGISTRO,
+    **overrides,
+) -> User:
+    user = UserFactory(**overrides)
+    plain_password = user.password
+
+    user.password = get_password_hash(plain_password)
+
+    session.add(user)
+    await session.flush()
+    session.add(UserRole(user_id=user.id, role=role))
+    await session.commit()
+    await session.refresh(user, ['role_assignments'])
+    user.clean_password = plain_password
+
+    return user
 
 
 @pytest.fixture
@@ -165,6 +184,30 @@ def token_coord(client, user_coord):
     return response.json()['access_token']
 
 
+@pytest.fixture
+def token_coord_gestao(client, user_coord_gestao):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_coord_gestao.username,
+            'password': user_coord_gestao.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
+@pytest.fixture
+def token_oficial(client, user_oficial):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_oficial.username,
+            'password': user_oficial.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
 @contextmanager
 def _mock_db_time(*, model, time=datetime(2025, 5, 21)):
     def fake_time_hook(mapper, connection, target):
@@ -189,30 +232,21 @@ def mock_db_time():
 
 @pytest_asyncio.fixture
 async def user(session):
-    user = UserFactory()
-    plain_password = user.password
-
-    user.password = get_password_hash(plain_password)
-
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    user.clean_password = plain_password
-
-    return user
+    return await create_user_with_role(session)
 
 
 @pytest_asyncio.fixture
 async def user_inactive(session):
-    user = UserFactory()
+    user = UserFactory(active=False)
     plain_password = user.password
 
     user.password = get_password_hash(plain_password)
-    user.active = False
 
     session.add(user)
+    await session.flush()
+    session.add(UserRole(user_id=user.id, role=Role.COLABORADOR_REGISTRO))
     await session.commit()
-    await session.refresh(user)
+    await session.refresh(user, ['role_assignments'])
 
     user.clean_password = plain_password
     return user
@@ -220,45 +254,35 @@ async def user_inactive(session):
 
 @pytest_asyncio.fixture
 async def user_admin(session):
-    user = UserFactory()
-    plain_password = user.password
-
-    user.password = get_password_hash(plain_password)
-    user.role = 'admin'
-
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    user.clean_password = plain_password
-
-    return user
+    return await create_user_with_role(session, Role.ADMIN)
 
 
 @pytest_asyncio.fixture
 async def user_coord(session):
-    user = UserFactory()
-    plain_password = user.password
+    return await create_user_with_role(session, Role.COORD_REGISTRO)
 
-    user.password = get_password_hash(plain_password)
-    user.role = 'coord'
 
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    user.clean_password = plain_password
+@pytest_asyncio.fixture
+async def user_coord_gestao(session):
+    return await create_user_with_role(session, Role.COORD_GESTAO)
 
-    return user
+
+@pytest_asyncio.fixture
+async def user_oficial(session):
+    return await create_user_with_role(session, Role.OFICIAL)
 
 
 @pytest_asyncio.fixture
 async def other_user(session):
-    user = UserFactory()
+    return await create_user_with_role(session)
 
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
 
-    return user
+@pytest_asyncio.fixture
+async def user_factory(session):
+    async def _create(role=Role.COLABORADOR_REGISTRO, **overrides):
+        return await create_user_with_role(session, role, **overrides)
+
+    return _create
 
 
 @pytest.fixture(autouse=True)

@@ -1,26 +1,30 @@
 from enum import Enum
 
 
+class Unidade(str, Enum):
+    DIRECAO = 'direcao'
+    REGISTRO = 'registro'
+    GESTAO = 'gestao'
+
+
 class Role(str, Enum):
     ADMIN = 'admin'
-    COORD = 'coord'
-    USER = 'user'
-
-
-class Setor(str, Enum):
-    REGISTRO = 'registro'
-    ADMINISTRATIVO = 'administrativo'
     OFICIAL = 'oficial'
+    SUBOFICIAL = 'suboficial'
+    COORD_REGISTRO = 'coord_registro'
+    COORD_GESTAO = 'coord_gestao'
+    GESTOR_PESSOAS = 'gestor_pessoas'
+    COLABORADOR_REGISTRO = 'colaborador_registro'
+    COLABORADOR_GESTAO = 'colaborador_gestao'
 
 
-SUBSETORES_POR_SETOR = {
-    Setor.REGISTRO: [
-        'Análise',
-        'Conferência',
-        'Finalização/Impressão',
-        'Busca e Certidão',
-        'Arquivo',
-    ],
-    Setor.ADMINISTRATIVO: ['Atendimento', 'Digitalização', 'Apoio'],
-    Setor.OFICIAL: ['Titular', 'Substituto'],
-}
+# Sugestões de lotação. `subunidade` é texto livre: a lista existe apenas
+# para orientar o cadastro e nunca concede permissão.
+SUBUNIDADES_SUGERIDAS = [
+    'Atendimento',
+    'Digitalização',
+    'Pessoas',
+    'Financeiro',
+    'Compras/Patrimônio',
+    'TI',
+]

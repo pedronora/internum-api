@@ -309,10 +309,7 @@ def test_user_cannot_list_all(session, client, token):
     )
 
     assert resp.status_code == HTTPStatus.FORBIDDEN
-    assert (
-        resp.json()['detail']
-        == 'Access forbidden. User role does not permit this action.'
-    )
+    assert resp.json()['detail'] == 'Acesso negado: usuário sem permissão'
 
 
 @pytest.mark.asyncio

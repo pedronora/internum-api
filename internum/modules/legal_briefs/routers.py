@@ -8,8 +8,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from internum.core.authorization import Permission
 from internum.core.database import get_session
-from internum.core.permissions import CurrentUser
+from internum.core.permissions import CurrentUser, require_permission
 from internum.modules.legal_briefs.models import LegalBrief, LegalBriefRevision
 from internum.modules.legal_briefs.schemas import (
     LegalBriefCreate,
@@ -19,27 +20,25 @@ from internum.modules.legal_briefs.schemas import (
     PageMeta,
     PaginatedLegalBriefList,
 )
+from internum.modules.users.schemas import UserRead
 from internum.utils.sanitize import plain_text
 
 router = APIRouter(prefix='/legal-briefs', tags=['Legal Briefs'])
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+CanManageBriefs = Annotated[
+    UserRead, Depends(require_permission(Permission.LEGAL_BRIEFS_MANAGE))
+]
 
 
 @router.post(
     '/', response_model=LegalBriefSchema, status_code=HTTPStatus.CREATED
 )
 async def create_legal_brief(
-    legal_brief: LegalBriefCreate, session: Session, current_user: CurrentUser
+    legal_brief: LegalBriefCreate,
+    session: Session,
+    current_user: CanManageBriefs,
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to create a LegalBrief.',
-        )
-
     db_legal_brief = LegalBrief(
         title=legal_brief.title.upper().strip(),
         content=legal_brief.content,
@@ -172,17 +171,8 @@ async def update_legal_brief(
     legal_brief_id: int,
     data: LegalBriefUpdate,
     session: Session,
-    current_user: CurrentUser,
+    current_user: CanManageBriefs,
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to update this LegalBrief.',
-        )
-
     current_brief = await session.scalar(
         select(LegalBrief).where(LegalBrief.id == legal_brief_id)
     )
@@ -245,7 +235,7 @@ async def update_legal_brief(
 async def cancel_legal_brief(
     legal_brief_id: int,
     session: Session,
-    current_user: CurrentUser,
+    current_user: CanManageBriefs,
 ):
     db_legal_brief = await session.scalar(
         select(LegalBrief)

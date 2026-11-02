@@ -6,13 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from internum.core.authorization import Permission, has_permission
 from internum.core.database import get_session
-from internum.core.permissions import (
-    CurrentUser,
-    VerifyAdminCoord,
-)
-from internum.modules.users.enums import Setor
+from internum.core.permissions import CurrentUser, require_permission
+from internum.modules.users.enums import Unidade
 from internum.modules.users.models import User
+from internum.modules.users.schemas import UserRead
 from internum.modules.vacation.enums import (
     VacationGrantStatus,
     VacationRequestStatus,
@@ -38,6 +37,17 @@ from internum.modules.vacation.services import CLTVacationService
 router = APIRouter(prefix='/vacation', tags=['Vacation'])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+CanReadAllVacation = Annotated[
+    UserRead, Depends(require_permission(Permission.VACATION_READ_ALL))
+]
+CanManageAllVacation = Annotated[
+    UserRead, Depends(require_permission(Permission.VACATION_MANAGE_ALL))
+]
+CanConfirmFruition = Annotated[
+    UserRead,
+    Depends(require_permission(Permission.VACATION_CONFIRM_FRUITION)),
+]
 
 
 def get_vacation_service(session: Session) -> CLTVacationService:
@@ -109,7 +119,7 @@ async def list_my_accrual_periods(
 async def list_user_accrual_periods(
     user_id: int,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanReadAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     user = await _load_user(session, user_id)
@@ -126,7 +136,7 @@ async def get_user_accrual_period(
     user_id: int,
     period_id: int,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanReadAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     user = await _load_user(session, user_id)
@@ -149,7 +159,7 @@ async def sell_vacation_days(  # noqa: PLR0913, PLR0917
     period_id: int,
     data: VacationSellDaysRequest,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanManageAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     """Venda de dias (abono pecuniário) - apenas admin/coord/RH."""
@@ -178,7 +188,7 @@ async def create_vacation_grant(  # noqa: PLR0913, PLR0917
     period_id: int,
     data: VacationGrantAdminCreate,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanManageAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     """Cadastra concessão de férias (admin/coord).
@@ -234,7 +244,7 @@ async def list_vacation_requests(  # noqa: PLR0913, PLR0917
 ):
     query = select(VacationRequest).options(selectinload(VacationRequest.user))
 
-    if current_user.role not in {'admin', 'coord'}:
+    if not has_permission(current_user.roles, Permission.VACATION_READ_ALL):
         query = query.where(VacationRequest.user_id == current_user.id)
     elif user_id:
         query = query.where(VacationRequest.user_id == user_id)
@@ -268,27 +278,27 @@ async def list_vacation_requests(  # noqa: PLR0913, PLR0917
 
 
 @router.get(
-    '/requests/by-sector/{setor}',
+    '/requests/by-unit/{unidade}',
     response_model=list[VacationRequestListItem],
 )
-async def list_vacation_requests_by_sector(  # noqa: PLR0913, PLR0917
-    setor: Setor,
+async def list_vacation_requests_by_unit(  # noqa: PLR0913, PLR0917
+    unidade: Unidade,
     session: Session,
-    current_user: VerifyAdminCoord,
-    subsetor: Annotated[Optional[str], Query()] = None,
+    current_user: CanReadAllVacation,
+    subunidade: Annotated[Optional[str], Query()] = None,
     status: Annotated[Optional[VacationRequestStatus], Query()] = None,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
-    """Lista solicitações de férias dos empregados de um setor/subsetor."""
+    """Lista solicitações de férias dos empregados de uma unidade."""
     query = (
         select(VacationRequest)
         .options(selectinload(VacationRequest.user))
         .join(User, VacationRequest.user_id == User.id)
-        .where(User.setor == setor)
+        .where(User.unidade == unidade)
     )
-    if subsetor:
-        query = query.where(User.subsetor == subsetor)
+    if subunidade:
+        query = query.where(User.subunidade == subunidade)
     if status:
         query = query.where(VacationRequest.status == status)
     query = (
@@ -326,10 +336,9 @@ async def get_vacation_request(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Solicitação não encontrada',
         )
-    if request.user_id != current_user.id and current_user.role not in {
-        'admin',
-        'coord',
-    }:
+    if request.user_id != current_user.id and not has_permission(
+        current_user.roles, Permission.VACATION_READ_ALL
+    ):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='Acesso negado: usuário sem permissão',
@@ -344,7 +353,7 @@ async def approve_vacation_request(
     request_id: int,
     data: VacationReviewRequest,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanManageAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     request = await _load_request_with_relations(session, request_id)
@@ -371,7 +380,7 @@ async def reject_vacation_request(
     request_id: int,
     data: VacationReviewRequest,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanManageAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     request = await _load_request_with_relations(session, request_id)
@@ -427,7 +436,7 @@ async def list_vacation_grants(  # noqa: PLR0913, PLR0917
     user_id: Annotated[Optional[int], Query()] = None,
     accrual_period_id: Annotated[Optional[int], Query()] = None,
 ):
-    if current_user.role not in {'admin', 'coord'}:
+    if not has_permission(current_user.roles, Permission.VACATION_READ_ALL):
         user_id = current_user.id
     try:
         grants = await service.list_grants(
@@ -441,23 +450,23 @@ async def list_vacation_grants(  # noqa: PLR0913, PLR0917
 
 
 @router.get(
-    '/grants/by-sector/{setor}', response_model=list[VacationGrantRead]
+    '/grants/by-unit/{unidade}', response_model=list[VacationGrantRead]
 )
-async def list_vacation_grants_by_sector(  # noqa: PLR0913, PLR0917
-    setor: Setor,
+async def list_vacation_grants_by_unit(  # noqa: PLR0913, PLR0917
+    unidade: Unidade,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanReadAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
-    subsetor: Annotated[Optional[str], Query()] = None,
+    subunidade: Annotated[Optional[str], Query()] = None,
     status: Annotated[Optional[VacationGrantStatus], Query()] = None,
     accrual_period_id: Annotated[Optional[int], Query()] = None,
 ):
-    """Lista concessões de férias dos empregados de um setor/subsetor."""
+    """Lista concessões de férias dos empregados de uma unidade."""
     grants = await service.list_grants(
         status=status,
         accrual_period_id=accrual_period_id,
-        setor=setor,
-        subsetor=subsetor,
+        unidade=unidade,
+        subunidade=subunidade,
     )
     return [_grant_read(g) for g in grants]
 
@@ -475,10 +484,9 @@ async def get_vacation_grant(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Concessão não encontrada',
         )
-    if grant.user_id != current_user.id and current_user.role not in {
-        'admin',
-        'coord',
-    }:
+    if grant.user_id != current_user.id and not has_permission(
+        current_user.roles, Permission.VACATION_READ_ALL
+    ):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='Acesso negado: usuário sem permissão',
@@ -494,7 +502,7 @@ async def confirm_grant_fruition(
     grant_id: int,
     data: VacationConfirmFruitionRequest,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanConfirmFruition,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     """RH confirma (ou não) a fruição efetiva de uma concessão."""
@@ -531,7 +539,7 @@ async def preview_vacation(
 @router.get('/alerts', response_model=list[VacationAccrualPeriodAlert])
 async def vacation_alerts(
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanReadAllVacation,
     service: Annotated[CLTVacationService, Depends(get_vacation_service)],
 ):
     """Alertas de férias: vencidos, prestes a vencer e pendentes."""

@@ -8,9 +8,10 @@ from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from internum.core.authorization import Permission, has_permission
 from internum.core.database import get_session
 from internum.core.email import EmailService
-from internum.core.permissions import CurrentUser
+from internum.core.permissions import CurrentUser, require_permission
 from internum.modules.library.enums import LoanStatus
 from internum.modules.library.models import Book, Loan
 from internum.modules.library.schemas import (
@@ -33,9 +34,14 @@ from internum.modules.library.templates import (
     loan_return_template,
 )
 from internum.modules.users.models import User
+from internum.modules.users.schemas import UserRead
 
 router = APIRouter(prefix='/library', tags=['Library'])
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+CanManageLibrary = Annotated[
+    UserRead, Depends(require_permission(Permission.LIBRARY_MANAGE))
+]
 
 email_service = EmailService()
 
@@ -53,17 +59,8 @@ ALLOWED_SORT_FIELDS = {
     '/books', status_code=HTTPStatus.CREATED, response_model=BookBaseSchema
 )
 async def create_book(
-    session: Session, book: BookCreateSchema, current_user: CurrentUser
+    session: Session, book: BookCreateSchema, current_user: CanManageLibrary
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to create a loan.',
-        )
-
     stmt = select(Book).where(Book.isbn == book.isbn)
     existing = await session.scalar(stmt)
 
@@ -182,17 +179,8 @@ async def update_book(
     session: Session,
     book_id: int,
     book_update: BookUpdateSchema,
-    current_user: CurrentUser,
+    current_user: CanManageLibrary,
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to update this loan.',
-        )
-
     book_db = await session.scalar(
         select(Book).where(Book.id == book_id, Book.deleted_at.is_(None))
     )
@@ -231,17 +219,8 @@ async def update_book(
 
 @router.delete('/books/{book_id}', status_code=HTTPStatus.NO_CONTENT)
 async def soft_delete_book(
-    session: Session, book_id: int, current_user: CurrentUser
+    session: Session, book_id: int, current_user: CanManageLibrary
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to delete this loan.',
-        )
-
     book_db = await session.scalar(
         select(Book).where(Book.id == book_id, Book.deleted_at.is_(None))
     )
@@ -384,18 +363,9 @@ async def cancel_loan(
 async def approve_and_start_loan(
     session: Session,
     loan_id: int,
-    current_user: CurrentUser,
+    current_user: CanManageLibrary,
     background_tasks: BackgroundTasks,
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to approve this loan.',
-        )
-
     loan_db = await session.scalar(
         select(Loan)
         .where(Loan.id == loan_id, Loan.deleted_at.is_(None))
@@ -467,10 +437,9 @@ async def return_loan(
             detail=f'Loan with id ({loan_id}) not found.',
         )
 
-    if loan_db.created_by_id != current_user.id and current_user.role not in {
-        'admin',
-        'coord',
-    }:
+    if loan_db.created_by_id != current_user.id and not has_permission(
+        current_user.roles, Permission.LIBRARY_MANAGE
+    ):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail='You are not allowed to return this loan.',
@@ -516,18 +485,9 @@ async def return_loan(
 async def reject_loan(
     session: Session,
     loan_id: int,
-    current_user: CurrentUser,
+    current_user: CanManageLibrary,
     background_tasks: BackgroundTasks,
 ):
-    if current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to reject this loan.',
-        )
-
     loan_db = await session.scalar(
         select(Loan)
         .options(selectinload(Loan.book), selectinload(Loan.created_by))
@@ -579,18 +539,9 @@ async def reject_loan(
 )
 async def list_loans(
     session: Session,
-    current_user: CurrentUser,
+    current_user: CanManageLibrary,
     params: Annotated[LoanQueryParams, Depends()],
 ):
-    if current_user.id and current_user.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='Access forbidden. User role does not permit this action.',
-        )
-
     stmt = select(Loan).options(
         selectinload(Loan.book),
         selectinload(Loan.created_by),

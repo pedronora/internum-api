@@ -58,20 +58,22 @@ created_by_id, updated_by_id, deleted_by_id: FK(User, ondelete='SET NULL')
 - **Tags**: `['ModuleName']`
 - **Dependencies**: Use `Annotated[Type, Depends(...)]` for all Depends
 - **Session**: `Session = Annotated[AsyncSession, Depends(get_session)]`
-- **Permissions**: Import from `core.permissions` (`CurrentUser`, `VerifyAdminCoord`, etc.)
+- **Permissions**: Import from `core.permissions` (`CurrentUser`, `require_permission`, `require_self_or_permission`)
 - **Error handling**: `HTTPException` with `HTTPStatus` enum
 - **Naming**: `{verb}_{entity}` (`create_user`, `get_vacation_request`)
 
-### 6. Permission System (`core/permissions.py`)
+### 6. Permission System (`core/authorization.py` + `core/permissions.py`)
 ```python
-CurrentUser          # authenticated user (get_current_user)
-VerifySelfAdmin      # user_id == current_user.id OR role == 'admin'
-VerifySelfAdminCoord # user_id == current_user.id OR role in ['admin', 'coord']
-VerifyAdminCoord     # role in ['admin', 'coord']
-VerifyAdmin          # role == 'admin'
+CurrentUser                          # authenticated user (get_current_user)
+require_permission(permission)       # dependency factory: 403 when user lacks permission
+require_self_or_permission(permission)  # self OR permission (per-user endpoints)
 ```
-- **Usage**: `current_user: VerifyAdminCoord` in endpoint signature
-- **Roles**: `Role.ADMIN`, `Role.COORD`, `Role.USER` (from `users/enums.py`)
+- **Usage**: `current_user: Annotated[UserRead, Depends(require_permission(Permission.X))]`
+- **Roles**: `admin`, `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` (from `users/enums.py`)
+- **Permissions**: catálogo em `core/authorization.py` (`Permission`), derivado dos perfis por `permissions_for_roles`
+- **Matriz completa**: `docs/authorization.md`
+- **Nunca** use checagem por `role == ...` em endpoints: use permissões
+- `admin`, `oficial` e `suboficial` têm break-glass (todas as permissões)
 
 ### 7. Database Session
 - **Engine**: `create_async_engine(Settings().DATABASE_URL, connect_args={'options': '-c timezone=UTC'})`
@@ -113,10 +115,12 @@ VerifyAdmin          # role == 'admin'
 ## Module-Specific Notes
 
 ### Users (`internum/modules/users/`)
-- **Model**: `User` with `hiring_date` (periodo aquisitivo base)
-- **Roles**: `ADMIN`, `COORD`, `USER`
-- **Setores**: `Setor.REGISTRO`, `Setor.ADMINISTRATIVO`, `Setor.OFICIAL` + subsetores (`SUBSETORES_POR_SETOR`)
-- **Approval**: Coord/Admin aprova via `VerifyAdminCoord` (role-based; não há verificação de mesmo setor)
+- **Model**: `User` com `hiring_date` (período aquisitivo base) e `UserRole` (N:N)
+- **Perfis**: `admin`, `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` — uma pessoa pode ter vários
+- **Unidades**: `Unidade.DIRECAO`, `Unidade.REGISTRO`, `Unidade.GESTAO`; `subunidade` é texto livre/opcional (`SUBUNIDADES_SUGERIDAS` só orienta o cadastro e nunca concede permissão)
+- **Aprovação**: por permissão (`vacation:manage_all`), não por setor; ver `docs/authorization.md`
+- **Schemas**: `UserRead` (sensível), `UserPublic` (diretório sem CPF/salário) e `UserSelf` (`roles` + `permissions`)
+- **Edição por campo**: `_apply_field_updates` valida a permissão de cada campo; ninguém edita os próprios perfis; último admin ativo é protegido
 
 ### Auth (`internum/modules/auth/`)
 - **Endpoints**: `/token`, `/refresh_token`, `/logout`, `/forgot-password`, `/reset-password`
@@ -129,7 +133,7 @@ VerifyAdmin          # role == 'admin'
 - **Model**: `VacationAccrualPeriod` per user com `days_earned`, `days_reserved`, `days_enjoyed`, `days_sold`, `days_double_paid`; status `ACQUISITIVE → CONCESSIVE → EXPIRED/CLOSED`; períodos criados automaticamente a partir de `hiring_date`
 - **Grants**: `VacationGrant` (NORMAL/RETROACTIVE/DOUBLE_PAYMENT) com status `GRANTED → FRUITED/PAID_DOUBLE/CANCELLED`; aprovação gera grants + reserva; RH confirma fruição (`confirm-fruition`); grants retroativo/dobro do admin são terminais (já nascem `FRUITED`/`PAID_DOUBLE`, somam em `days_enjoyed`/`days_double_paid`, sem reserva/confirmação)
 - **Workflow**: Requests nascem em `SUBMITTED` → `APPROVED/REJECTED/CANCELLED`; aprovação gera concessões e reserva dias
-- **By-sector**: `GET /grants/by-sector/{setor}` e `GET /requests/by-sector/{setor}` (Admin/Coord, opcional `?subsetor=`)
+- **Por unidade**: `GET /grants/by-unit/{unidade}` e `GET /requests/by-unit/{unidade}` (`vacation:manage_all`, opcional `?subunidade=`; `subunidade` é texto livre)
 - **Migration**: `a911d5bbe8d1` criou `vacation_accrual_periods` + `vacation_grants` e removeu `vacation_balances`/`vacation_historical_periods`
 
 ### Library (`internum/modules/library/`)
