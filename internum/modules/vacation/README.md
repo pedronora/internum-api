@@ -143,35 +143,35 @@ Prefixo: `/api/v1/vacation` (definido em `internum/api/main.py`).
 | Método | Rota | Permissão | Descrição |
 |--------|------|-----------|-----------|
 | GET | `/accrual-periods` | User (próprio) | Meus períodos (cria os ausentes e sincroniza) |
-| GET | `/accrual-periods/{user_id}` | Admin/Coord | Períodos de outro usuário |
-| GET | `/accrual-periods/{user_id}/{period_id}` | Admin/Coord | Período específico com concessões |
-| POST | `/accrual-periods/{user_id}/{period_id}/sell` | **Admin** | Vender dias (abono pecuniário) |
-| POST | `/accrual-periods/{user_id}/{period_id}/grants` | Admin/Coord | Cadastrar concessão: `normal` (marcar férias em período concessivo), `retroactive`/`double_payment` (período expirado) |
+| GET | `/accrual-periods/{user_id}` | `vacation:read_all` | Períodos de outro usuário |
+| GET | `/accrual-periods/{user_id}/{period_id}` | `vacation:read_all` | Período específico com concessões |
+| POST | `/accrual-periods/{user_id}/{period_id}/sell` | `vacation:manage_all` | Vender dias (abono pecuniário) |
+| POST | `/accrual-periods/{user_id}/{period_id}/grants` | `vacation:manage_all` | Cadastrar concessão: `normal` (marcar férias em período concessivo), `retroactive`/`double_payment` (período expirado) |
 
 ### Solicitações (Requests)
 | Método | Rota | Permissão | Descrição |
 |--------|------|-----------|-----------|
 | POST | `/requests` | User | Criar solicitação (já em `submitted`) |
-| GET | `/requests` | User (próprio) / Admin/Coord (todos) | Listar (filtros: status, user_id, skip, limit) |
-| GET | `/requests/{request_id}` | User (próprio) / Admin/Coord | Detalhes com períodos |
-| GET | `/requests/by-sector/{setor}` | Admin/Coord | Solicitações por setor (opcional `?subsetor=`, `?status=`) |
-| POST | `/requests/{request_id}/approve` | Admin/Coord | Aprovar (gera concessões e reserva dias) |
-| POST | `/requests/{request_id}/reject` | Admin/Coord | Rejeitar |
+| GET | `/requests` | User (próprio) / `vacation:read_all` (todos) | Listar (filtros: status, user_id, skip, limit) |
+| GET | `/requests/{request_id}` | User (próprio) / `vacation:read_all` | Detalhes com períodos |
+| GET | `/requests/by-unit/{unidade}` | `vacation:read_all` | Solicitações por unidade (opcional `?subunidade=`, `?status=`) |
+| POST | `/requests/{request_id}/approve` | `vacation:manage_all` | Aprovar (gera concessões e reserva dias) |
+| POST | `/requests/{request_id}/reject` | `vacation:manage_all` | Rejeitar |
 | POST | `/requests/{request_id}/cancel` | User (próprio) | Cancelar (se `submitted`/`under_review`) |
 
 ### Concessões (Grants)
 | Método | Rota | Permissão | Descrição |
 |--------|------|-----------|-----------|
-| GET | `/grants` | User (próprio) / Admin/Coord | Listar (filtros: status, user_id, accrual_period_id) |
-| GET | `/grants/{grant_id}` | User (próprio) / Admin/Coord | Detalhe da concessão |
-| GET | `/grants/by-sector/{setor}` | Admin/Coord | Concessões por setor (opcional `?subsetor=`, `?status=`) |
-| POST | `/grants/{grant_id}/confirm-fruition` | **Admin** | RH confirma (ou não) a fruição efetiva |
+| GET | `/grants` | User (próprio) / `vacation:read_all` | Listar (filtros: status, user_id, accrual_period_id) |
+| GET | `/grants/{grant_id}` | User (próprio) / `vacation:read_all` | Detalhe da concessão |
+| GET | `/grants/by-unit/{unidade}` | `vacation:read_all` | Concessões por unidade (opcional `?subunidade=`, `?status=`) |
+| POST | `/grants/{grant_id}/confirm-fruition` | `vacation:confirm_fruition` | RH confirma (ou não) a fruição efetiva |
 
 ### Preview e Alertas
 | Método | Rota | Permissão | Descrição |
 |--------|------|-----------|-----------|
 | POST | `/preview` | User | Valida períodos sem criar request |
-| GET | `/alerts` | Admin/Coord | Períodos expirados com saldo a regularizar (candidatos a dobro) |
+| GET | `/alerts` | `vacation:read_all` | Períodos expirados com saldo a regularizar (candidatos a dobro) |
 
 ## Workflow
 
@@ -262,7 +262,7 @@ Métodos principais:
 - `reject_request(request, reviewer, notes)` - Rejeita
 - `cancel_request(request, user)` - Cancela (apenas dono, se pendente)
 - `create_grant(data, creator)` - Marcação direta (normal, período concessivo, com validação CLT) ou regularização (retroativo/dobro, período expirado)
-- `list_grants(user_id, status, accrual_period_id, setor, subsetor)` - Concessões com filtros (inclui por setor/subsetor do empregado)
+- `list_grants(user_id, status, accrual_period_id, unidade, subunidade)` - Concessões com filtros (inclui por unidade/subunidade do empregado)
 - `confirm_fruition(grant, user, confirm, notes)` - RH confirma/nega fruição
 - `sell_days(accrual, days, admin)` - Venda de dias (abono pecuniário)
 - `get_double_payment_alerts()` - Alertas de períodos expirados
@@ -270,15 +270,16 @@ Métodos principais:
 ## Permissões
 
 ```python
-# core/permissions.py
-CurrentUser          # usuário autenticado (get_current_user)
-VerifyAdminCoord     # role in ['admin', 'coord']
-VerifyAdmin          # role == 'admin'
+# core/authorization.py + core/permissions.py
+CurrentUser                    # usuário autenticado (get_current_user)
+require_permission(Permission) # 403 quando o usuário não tem a permissão
 ```
 
-- **Admin/Coord** aprovam/rejeitam solicitações, veem dados de qualquer usuário, recebem alertas e cadastram concessões (`normal`/`retroactive`/`double_payment`).
-- **Admin** (apenas) vende dias e confirma fruição de grants normais.
+- **`vacation:read_all`** — vê férias de qualquer unidade (coordenadores, gestor de pessoas, oficial/suboficial e admin).
+- **`vacation:manage_all`** — aprova/rejeita solicitações, cadastra concessões e vende dias.
+- **`vacation:confirm_fruition`** — confirma/nega a fruição efetiva.
 - **Usuário** consulta e solicita apenas seus próprios dados.
+- A matriz completa está em `docs/authorization.md`.
 
 ## Integração
 
