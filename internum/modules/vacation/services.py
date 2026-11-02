@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from internum.modules.users.enums import Setor
+from internum.modules.users.enums import Unidade
 from internum.modules.users.models import User
 from internum.modules.vacation.enums import (
     VacationAccrualStatus,
@@ -675,8 +675,7 @@ class CLTVacationService:  # noqa: PLR0904
                 and days < self.MIN_PERIOD_DAYS
             ):
                 raise ValueError(
-                    f'Mínimo de {self.MIN_PERIOD_DAYS} dias corridos '
-                    'para gozo'
+                    f'Mínimo de {self.MIN_PERIOD_DAYS} dias corridos para gozo'
                 )
             return days
 
@@ -714,8 +713,8 @@ class CLTVacationService:  # noqa: PLR0904
         user_id: Optional[int] = None,
         status: Optional[VacationGrantStatus] = None,
         accrual_period_id: Optional[int] = None,
-        setor: Optional[Setor] = None,
-        subsetor: Optional[str] = None,
+        unidade: Optional[Unidade] = None,
+        subunidade: Optional[str] = None,
     ) -> list[VacationGrant]:
         query = select(VacationGrant)
         if user_id is not None:
@@ -726,12 +725,12 @@ class CLTVacationService:  # noqa: PLR0904
             query = query.where(
                 VacationGrant.accrual_period_id == accrual_period_id
             )
-        if setor is not None or subsetor is not None:
+        if unidade is not None or subunidade is not None:
             query = query.join(User, VacationGrant.user_id == User.id)
-            if setor is not None:
-                query = query.where(User.setor == setor)
-            if subsetor is not None:
-                query = query.where(User.subsetor == subsetor)
+            if unidade is not None:
+                query = query.where(User.unidade == unidade)
+            if subunidade is not None:
+                query = query.where(User.subunidade == subunidade)
         query = query.order_by(VacationGrant.start_date.desc())
         result = await self.session.execute(query)
         return list(result.scalars().all())

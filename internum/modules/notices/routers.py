@@ -8,11 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import not_
 
+from internum.core.authorization import Permission
 from internum.core.database import get_session
-from internum.core.permissions import (
-    CurrentUser,
-    VerifyAdminCoord,
-)
+from internum.core.permissions import CurrentUser, require_permission
 from internum.modules.notices.models import Notice, NoticeRead
 from internum.modules.notices.schemas import (
     Message,
@@ -24,9 +22,14 @@ from internum.modules.notices.schemas import (
     PaginatedNoticeList,
 )
 from internum.modules.users.models import User
+from internum.modules.users.schemas import UserRead
 
 router = APIRouter(prefix='/notices', tags=['Notices'])
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+CanManageNotices = Annotated[
+    UserRead, Depends(require_permission(Permission.NOTICES_MANAGE))
+]
 
 
 @router.get('/unreads/me', response_model=PaginatedNoticeList)
@@ -217,17 +220,8 @@ async def mark_as_read(
 async def create_notice(
     notice: NoticeCreate,
     session: Session,
-    author: CurrentUser,
+    author: CanManageNotices,
 ):
-    if author.role not in {
-        'admin',
-        'coord',
-    }:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN,
-            detail='You are not allowed to create a Notice.',
-        )
-
     db_notice = Notice(title=notice.title, content=notice.content)
     db_notice.created_by_id = author.id
 
@@ -342,7 +336,7 @@ async def get_notice_by_id(
 async def deactivate_notice(
     notice_id: int,
     session: Session,
-    current_user: VerifyAdminCoord,
+    current_user: CanManageNotices,
 ):
     db_notice = await session.scalar(
         select(Notice).where(Notice.id == notice_id)

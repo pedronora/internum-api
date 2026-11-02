@@ -49,9 +49,7 @@ def test_create_legal_brief_without_permission(client, user, token):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_create_legal_brief_sanitizes_content(
-    client, user_admin, token_admin
-):
+def test_create_legal_brief_sanitizes_content(client, user_admin, token_admin):
     new_legal_brief = {
         'title': 'Ementa com HTML',
         'content': (

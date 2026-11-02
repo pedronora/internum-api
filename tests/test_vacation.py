@@ -7,8 +7,8 @@ from fastapi._compat import get_cached_model_fields  # noqa: PLC2701
 from freezegun import freeze_time
 
 from internum.core.security import get_password_hash
-from internum.modules.users.enums import Role, Setor
-from internum.modules.users.models import User
+from internum.modules.users.enums import Role, Unidade
+from internum.modules.users.models import User, UserRole
 from internum.modules.vacation import schemas as vacation_schemas
 from internum.modules.vacation.services import CLTVacationService
 from tests.conftest import UserFactory
@@ -58,68 +58,60 @@ def warm_fastapi_schemas():
         get_cached_model_fields(getattr(vacation_schemas, name))
 
 
-def build_user(**overrides) -> User:
-    defaults = {'hiring_date': HIRING_DATE}
+def build_user(role: Role = Role.COLABORADOR_REGISTRO, **overrides) -> User:
+    defaults = {
+        'hiring_date': HIRING_DATE,
+        'unidade': Unidade.REGISTRO,
+        'subunidade': 'Análise',
+    }
     defaults.update(overrides)
     user = UserFactory(**defaults)
     plain_password = user.password
     user.password = get_password_hash(plain_password)
     user.clean_password = plain_password
+    user.initial_role = role
+    return user
+
+
+async def persist_user(session, user: User) -> User:
+    session.add(user)
+    await session.flush()
+    session.add(UserRole(user_id=user.id, role=user.initial_role))
+    await session.commit()
+    await session.refresh(user, ['role_assignments'])
     return user
 
 
 @pytest_asyncio.fixture
 async def vacation_user(session) -> User:
-    user = build_user(role=Role.USER)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(session, build_user())
 
 
 @pytest_asyncio.fixture
 async def vacation_old_user(session) -> User:
-    user = build_user(role=Role.USER, hiring_date=OLD_HIRING_DATE)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(session, build_user(hiring_date=OLD_HIRING_DATE))
 
 
 @pytest_asyncio.fixture
 async def about_to_expire_user(session) -> User:
-    user = build_user(role=Role.USER, hiring_date=date(2023, 6, 16))
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(
+        session, build_user(hiring_date=date(2023, 6, 16))
+    )
 
 
 @pytest_asyncio.fixture
 async def vacation_other(session) -> User:
-    user = build_user(role=Role.USER)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(session, build_user())
 
 
 @pytest_asyncio.fixture
 async def vacation_coord(session) -> User:
-    user = build_user(role=Role.COORD)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(session, build_user(role=Role.COORD_REGISTRO))
 
 
 @pytest_asyncio.fixture
 async def vacation_admin(session) -> User:
-    user = build_user(role=Role.ADMIN)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    return await persist_user(session, build_user(role=Role.ADMIN))
 
 
 def auth_headers(client, user: User) -> dict:
@@ -1330,24 +1322,24 @@ def test_no_alert_when_grant_active(client, vacation_user, vacation_admin):
     assert user_alerts == []
 
 
-# --- Filtro por setor/subsetor -------------------------------------------
+# --- Filtro por unidade/subunidade ---------------------------------------
 
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_grants_by_sector(client, session, vacation_admin):
-    registro_user = build_user(
-        role=Role.USER, setor=Setor.REGISTRO, subsetor='Análise'
+async def test_list_grants_by_unit(client, session, vacation_admin):
+    registro_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.REGISTRO, subunidade='Análise'),
     )
-    admin_user = build_user(
-        role=Role.USER, setor=Setor.ADMINISTRATIVO, subsetor='Atendimento'
+    gestao_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.GESTAO, subunidade='Atendimento'),
     )
-    session.add_all([registro_user, admin_user])
-    await session.commit()  # type: ignore[misc]
 
     admin_headers = auth_headers(client, vacation_admin)
     grant_ids = {}
-    for user in (registro_user, admin_user):
+    for user in (registro_user, gestao_user):
         headers = auth_headers(client, user)
         period = get_period_by_status(client, headers, 'concessive')
         request_id = create_request(
@@ -1363,7 +1355,7 @@ async def test_list_grants_by_sector(client, session, vacation_admin):
         grant_ids[user.id] = grant['id']
 
     response = client.get(
-        ENDPOINT_URL + '/grants/by-sector/registro',
+        ENDPOINT_URL + '/grants/by-unit/registro',
         headers=admin_headers,
     )
     assert response.status_code == HTTPStatus.OK
@@ -1371,30 +1363,30 @@ async def test_list_grants_by_sector(client, session, vacation_admin):
     assert [g['id'] for g in items] == [grant_ids[registro_user.id]]
 
     response = client.get(
-        ENDPOINT_URL + '/grants/by-sector/administrativo',
+        ENDPOINT_URL + '/grants/by-unit/gestao',
         headers=admin_headers,
     )
-    assert [g['id'] for g in response.json()] == [grant_ids[admin_user.id]]
+    assert [g['id'] for g in response.json()] == [grant_ids[gestao_user.id]]
 
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_grants_by_sector_and_subsetor(
+async def test_list_grants_by_unit_and_subunidade(
     client, session, vacation_admin
 ):
-    subsetor = 'Atendimento'
-    admin_user = build_user(
-        role=Role.USER, setor=Setor.ADMINISTRATIVO, subsetor=subsetor
+    subunidade = 'Atendimento'
+    gestao_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.GESTAO, subunidade=subunidade),
     )
-    other_admin_user = build_user(
-        role=Role.USER, setor=Setor.ADMINISTRATIVO, subsetor='Apoio'
+    other_gestao_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.GESTAO, subunidade='TI'),
     )
-    session.add_all([admin_user, other_admin_user])
-    await session.commit()  # type: ignore[misc]
 
     admin_headers = auth_headers(client, vacation_admin)
     target_ids = {}
-    for user in (admin_user, other_admin_user):
+    for user in (gestao_user, other_gestao_user):
         headers = auth_headers(client, user)
         period = get_period_by_status(client, headers, 'concessive')
         request_id = create_request(
@@ -1410,29 +1402,29 @@ async def test_list_grants_by_sector_and_subsetor(
         target_ids[user.id] = grant['id']
 
     response = client.get(
-        f'{ENDPOINT_URL}/grants/by-sector/administrativo?subsetor={subsetor}',
+        f'{ENDPOINT_URL}/grants/by-unit/gestao?subunidade={subunidade}',
         headers=admin_headers,
     )
     assert response.status_code == HTTPStatus.OK
     items = response.json()
-    assert [g['id'] for g in items] == [target_ids[admin_user.id]]
+    assert [g['id'] for g in items] == [target_ids[gestao_user.id]]
 
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_requests_by_sector(client, session, vacation_admin):
-    registro_user = build_user(
-        role=Role.USER, setor=Setor.REGISTRO, subsetor='Análise'
+async def test_list_requests_by_unit(client, session, vacation_admin):
+    registro_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.REGISTRO, subunidade='Análise'),
     )
-    admin_user = build_user(
-        role=Role.USER, setor=Setor.ADMINISTRATIVO, subsetor='Atendimento'
+    gestao_user = await persist_user(
+        session,
+        build_user(unidade=Unidade.GESTAO, subunidade='Atendimento'),
     )
-    session.add_all([registro_user, admin_user])
-    await session.commit()  # type: ignore[misc]
 
     admin_headers = auth_headers(client, vacation_admin)
     expected_ids = {}
-    for user in (registro_user, admin_user):
+    for user in (registro_user, gestao_user):
         headers = auth_headers(client, user)
         period = get_period_by_status(client, headers, 'concessive')
         expected_ids[user.id] = create_request(
@@ -1440,7 +1432,7 @@ async def test_list_requests_by_sector(client, session, vacation_admin):
         )
 
     response = client.get(
-        ENDPOINT_URL + '/requests/by-sector/registro',
+        ENDPOINT_URL + '/requests/by-unit/registro',
         headers=admin_headers,
     )
     assert response.status_code == HTTPStatus.OK
@@ -1448,7 +1440,7 @@ async def test_list_requests_by_sector(client, session, vacation_admin):
     assert [r['id'] for r in items] == [expected_ids[registro_user.id]]
 
     response = client.get(
-        ENDPOINT_URL + '/requests/by-sector/administrativo?subsetor=Apoio',
+        ENDPOINT_URL + '/requests/by-unit/gestao?subunidade=TI',
         headers=admin_headers,
     )
     assert response.status_code == HTTPStatus.OK
@@ -1457,12 +1449,12 @@ async def test_list_requests_by_sector(client, session, vacation_admin):
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_grants_by_sector_requires_admin_or_coord(
+async def test_list_grants_by_unit_requires_permission(
     client, session, vacation_user
 ):
     headers = auth_headers(client, vacation_user)
     response = client.get(
-        ENDPOINT_URL + '/grants/by-sector/registro',
+        ENDPOINT_URL + '/grants/by-unit/registro',
         headers=headers,
     )
     assert response.status_code == HTTPStatus.FORBIDDEN
