@@ -17,7 +17,20 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-app = FastAPI(title='Internum API - 1 RI Cascavel', lifespan=lifespan)
+def create_app(docs_enabled: bool | None = None) -> FastAPI:
+    if docs_enabled is None:
+        docs_enabled = settings.DOCS_ENABLED
+
+    return FastAPI(
+        title='Internum API - 1 RI Cascavel',
+        lifespan=lifespan,
+        docs_url='/docs' if docs_enabled else None,
+        redoc_url='/redoc' if docs_enabled else None,
+        openapi_url='/openapi.json' if docs_enabled else None,
+    )
+
+
+app = create_app()
 
 
 origins = [
