@@ -13,7 +13,8 @@ from pydantic import (
     validator,
 )
 
-from internum.modules.users.enums import Role, Setor
+from internum.core.authorization import Permission
+from internum.modules.users.enums import Role, Unidade
 
 MIN_LENGTH_PWD = 8
 MAX_LENGTH_PWD = 64
@@ -93,91 +94,9 @@ class UserBase(BaseModel):
     email: EmailStr
     birthday: date
     hiring_date: date
-    setor: Setor
-    subsetor: str
-    role: Role = Role.USER
+    unidade: Unidade
+    subunidade: Optional[str] = None
     active: bool = True
-    phone: Optional[str] = None
-    gross_salary: Optional[Decimal] = Field(None, ge=0)
-
-    @field_validator('email', mode='before')
-    def normalize_email(cls, v):
-        if v and isinstance(v, str):
-            return v.strip().lower()
-        return v  # pragma: no cover
-
-    @field_validator('name', 'username', mode='before')
-    def strip_whitespace(cls, v):
-        if isinstance(v, str):
-            return v.strip()
-        return v  # pragma: no cover
-
-    @field_validator('cpf', mode='before')
-    def validate_and_normalize_cpf(cls, v):
-        if not isinstance(v, str):
-            raise ValueError('CPF inválido.')
-        return validate_cpf(v)
-
-    @field_validator('phone', mode='before')
-    def validate_and_normalize_phone(cls, v):
-        if v is None or not v:
-            return None
-        if not isinstance(v, str):
-            raise ValueError('Telefone inválido.')
-        return validate_phone(v)
-
-
-class UserCreate(UserBase):
-    password: str
-    _validate_password = validator('password', allow_reuse=True)(
-        validate_password_complexity
-    )
-
-
-class UserChangePassword(BaseModel):
-    old_password: str
-    new_password: str
-    _validate_password = validator('new_password', allow_reuse=True)(
-        validate_password_complexity
-    )
-
-
-class UserRead(UserBase):
-    id: int
-    termination_date: date | None = None
-    created_at: datetime
-    updated_at: datetime | None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PageMeta(BaseModel):
-    total: int
-    page: int
-    size: int
-    total_pages: int
-    has_next: bool
-    has_prev: bool
-    offset: int
-
-
-class PaginatedUserList(BaseModel):
-    meta: PageMeta
-    users: list[UserRead]
-
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=4)
-    username: Optional[str] = Field(None, min_length=4)
-    cpf: Optional[str] = None
-    email: Optional[EmailStr] = None
-    birthday: Optional[date] = None
-    hiring_date: Optional[date] = None
-    termination_date: Optional[date] = None
-    setor: Optional[Setor] = None
-    subsetor: Optional[str] = Field(None, min_length=4)
-    role: Optional[Role] = None
-    active: Optional[bool] = None
     phone: Optional[str] = None
     gross_salary: Optional[Decimal] = Field(None, ge=0)
 
@@ -208,6 +127,86 @@ class UserUpdate(BaseModel):
         if not isinstance(v, str):
             raise ValueError('Telefone inválido.')
         return validate_phone(v)
+
+
+class UserCreate(UserBase):
+    password: str
+    roles: list[Role] = Field(min_length=1)
+
+    _validate_password = validator('password', allow_reuse=True)(
+        validate_password_complexity
+    )
+
+
+class UserChangePassword(BaseModel):
+    old_password: str
+    new_password: str
+    _validate_password = validator('new_password', allow_reuse=True)(
+        validate_password_complexity
+    )
+
+
+class UserRead(UserBase):
+    id: int
+    roles: list[Role]
+    termination_date: date | None = None
+    created_at: datetime
+    updated_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserSelf(UserRead):
+    permissions: list[Permission] = Field(default_factory=list)
+
+
+class UserPublic(BaseModel):
+    id: int
+    name: str
+    username: str
+    email: EmailStr
+    unidade: Unidade
+    subunidade: Optional[str] = None
+    phone: Optional[str] = None
+    roles: list[Role]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PageMeta(BaseModel):
+    total: int
+    page: int
+    size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+    offset: int
+
+
+class PaginatedUserList(BaseModel):
+    meta: PageMeta
+    users: list[UserRead]
+
+
+class PaginatedUserDirectory(BaseModel):
+    meta: PageMeta
+    users: list[UserPublic]
+
+
+class UserUpdate(UserBase):
+    name: Optional[str] = Field(None, min_length=4)
+    username: Optional[str] = Field(None, min_length=4)
+    cpf: Optional[str] = None
+    email: Optional[EmailStr] = None
+    birthday: Optional[date] = None
+    hiring_date: Optional[date] = None
+    unidade: Optional[Unidade] = None
+    subunidade: Optional[str] = Field(None, min_length=2)
+    active: Optional[bool] = None
+    phone: Optional[str] = None
+    gross_salary: Optional[Decimal] = Field(None, ge=0)
+    termination_date: Optional[date] = None
+    roles: Optional[list[Role]] = Field(None, min_length=1)
 
     @model_validator(mode='after')
     def validate_active_termination_date(self):

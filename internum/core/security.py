@@ -15,6 +15,7 @@ from jwt import (
 from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from internum.core.database import get_session
 from internum.core.settings import Settings
@@ -120,7 +121,9 @@ async def get_current_user(
         raise credentials_exception
 
     user = await session.scalar(
-        select(User).where(User.username == subject_username)
+        select(User)
+        .options(selectinload(User.role_assignments))
+        .where(User.username == subject_username)
     )
 
     if not user:
