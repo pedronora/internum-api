@@ -1,8 +1,9 @@
+import logging
 from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ from internum.modules.users.routers import router as users_router
 from internum.modules.vacation.routers import router as vacation_router
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/api/v1')
 router.include_router(auth_router)
@@ -32,32 +34,18 @@ router.include_router(vacation_router)
     '/status',
     response_model=Status,
     responses={
-        HTTPStatus.NOT_FOUND: {'model': ErrorResponse},
-        HTTPStatus.INTERNAL_SERVER_ERROR: {'model': ErrorResponse},
+        HTTPStatus.SERVICE_UNAVAILABLE: {'model': ErrorResponse},
     },
     tags=['API'],
 )
 async def status_db(session: Session):
     try:
-        result = await session.execute(
-            select(func.version(), func.current_database(), func.now())
-        )
-        status = result.fetchone()
-
-        if status:
-            version, current_db, current_time = status
-            return {
-                'status': 'ok',
-                'version_db': version,
-                'current_db': current_db,
-                'current_time': current_time,
-            }
-        else:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail='No data found'
-            )
-    except SQLAlchemyError as e:
+        await session.execute(select(1))
+    except SQLAlchemyError:
+        logger.exception('Falha ao verificar a conexão com o banco de dados.')
         raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}',
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            detail='Serviço indisponível',
         )
+
+    return {'status': 'ok'}
