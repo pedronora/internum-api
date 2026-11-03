@@ -218,4 +218,4 @@ class Message(BaseModel):
 
 
 class ChangePasswordResponse(Message):
-    access_token: str
+    access_token: str | None = None

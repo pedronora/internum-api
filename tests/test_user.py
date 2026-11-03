@@ -772,6 +772,7 @@ def test_change_pwd_retorna_novo_access_token(client, user, token):
     assert response.status_code == HTTPStatus.OK
     new_token = response.json()['access_token']
 
+    assert new_token
     assert (
         client.get(f'{ENDPOINT_URL}/me', headers=auth(new_token)).status_code
         == HTTPStatus.OK
@@ -909,6 +910,7 @@ def test_admin_change_pwd_revoga_sessoes_do_alvo(
             },
         )
         assert response.status_code == HTTPStatus.OK
+        assert response.json()['access_token'] is None
 
         assert (
             refresh_with(client, target_refresh).status_code

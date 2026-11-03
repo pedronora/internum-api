@@ -472,19 +472,23 @@ async def change_password(
             detail='Senha nova igual à atual.',
         )
 
-    keep_jti = None
-
-    if current_user.id == db_user.id:
-        keep_jti = refresh_token_jti(
-            request.cookies.get(settings.REFRESH_COOKIE_NAME)
-        )
+    is_self = current_user.id == db_user.id
+    keep_jti = (
+        refresh_token_jti(request.cookies.get(settings.REFRESH_COOKIE_NAME))
+        if is_self
+        else None
+    )
 
     db_user.password = get_password_hash(passwords.new_password)
     db_user.password_changed_at = datetime.now(UTC)
     await delete_user_tokens(session, db_user.id, keep_jti=keep_jti)
     await session.commit()
 
-    access_token = create_access_token(data={'sub': db_user.username})
+    access_token = (
+        create_access_token(data={'sub': db_user.username})
+        if is_self
+        else None
+    )
 
     return {
         'message': 'Senha alterada com sucesso',
