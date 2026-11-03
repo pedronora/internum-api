@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
@@ -32,6 +32,9 @@ class RefreshToken:
         nullable=False,
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    session_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True)
+    )
     rotated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
@@ -43,3 +46,8 @@ class RefreshToken:
 
     def is_expired(self) -> bool:
         return datetime.now(UTC) >= self.expires_at
+
+    def is_session_expired(self, max_days: int) -> bool:
+        return datetime.now(UTC) >= self.session_started_at + timedelta(
+            days=max_days
+        )

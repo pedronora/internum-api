@@ -7,8 +7,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.security import create_refresh_token, decode_token
+from internum.core.settings import Settings
 from internum.modules.auth.models import RefreshToken
 from internum.modules.users.models import User
+
+settings = Settings()
 
 INVALID_REFRESH_TOKEN = 'Refresh token inválido'
 
@@ -24,7 +27,11 @@ def _invalid_refresh_token() -> HTTPException:
     )
 
 
-async def issue_refresh_token(session: AsyncSession, user: User) -> str:
+async def issue_refresh_token(
+    session: AsyncSession,
+    user: User,
+    session_started_at: datetime | None = None,
+) -> str:
     token = create_refresh_token(data={'sub': user.username})
     payload = decode_token(token, expected_type='refresh')
 
@@ -33,6 +40,7 @@ async def issue_refresh_token(session: AsyncSession, user: User) -> str:
             jti=payload['jti'],
             user_id=user.id,
             expires_at=datetime.fromtimestamp(payload['exp'], UTC),
+            session_started_at=session_started_at or _now(),
         )
     )
 
@@ -67,13 +75,18 @@ async def rotate_refresh_token(
     if db_token.is_expired():
         raise _invalid_refresh_token()
 
+    if db_token.is_session_expired(settings.REFRESH_TOKEN_ABSOLUTE_DAYS):
+        raise _invalid_refresh_token()
+
     user = await session.get(User, db_token.user_id)
 
     if user is None or not user.active:
         raise _invalid_refresh_token()
 
     db_token.rotated_at = _now()
-    new_token = await issue_refresh_token(session, user)
+    new_token = await issue_refresh_token(
+        session, user, session_started_at=db_token.session_started_at
+    )
     await session.commit()
 
     return new_token, user
