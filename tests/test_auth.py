@@ -347,6 +347,7 @@ async def test_login_persiste_refresh_token(client, session, user):
 
     assert db_token is not None
     assert db_token.rotated_at is None
+    assert db_token.session_started_at is not None
 
 
 def test_refresh_rotaciona_token(client, user):
@@ -360,6 +361,28 @@ def test_refresh_rotaciona_token(client, user):
 
     assert response.status_code == HTTPStatus.OK
     assert client.cookies.get(settings.REFRESH_COOKIE_NAME) != old_token
+
+
+def test_rotacao_nao_estende_limite_absoluto(client, user):
+    with freeze_time('2025-09-17 12:00:00') as frozen:
+        client.post(
+            f'{ENDPOINT_URL}/token',
+            data={
+                'username': user.username,
+                'password': user.clean_password,
+            },
+        )
+
+        frozen.tick(timedelta(days=6))
+        rotated = client.post(f'{ENDPOINT_URL}/refresh_token')
+        assert rotated.status_code == HTTPStatus.OK
+
+        rotated_refresh = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+        frozen.tick(timedelta(days=2))
+        response = _refresh_with(client, rotated_refresh)
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_reuso_de_refresh_token_encerra_sessoes(client, user):

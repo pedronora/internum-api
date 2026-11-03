@@ -85,7 +85,8 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **Access token**: Short-lived (configurable minutes), in Authorization header; payload tem `type='access'`
 - **Refresh token**: Long-lived (days), in HttpOnly cookie (`REFRESH_COOKIE_NAME`) e persistido em `refresh_tokens`
 - **Validação do access**: `get_current_user` exige `type='access'`, rejeita token com `purpose` (token de reset não vira sessão) e exige `iat` posterior a `users.password_changed_at` (tolerância de 1s por causa da precisão em segundos do `iat`)
-- **Rotação**: `/refresh_token` consome o token atual (`SELECT ... FOR UPDATE`) e emite um novo; reuso de token com `rotated_at` preenchido apaga todas as sessões do usuário
+- **Rotação**: `/refresh_token` consome o token atual (`SELECT ... FOR UPDATE`) e emite um novo; reuso de token com `rotated_at` preenchido apaga todas as sessões do usuário. Cada linha guarda `session_started_at`, herdado nas rotações; passados `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 7) do início da sessão, o refresh é rejeitado mesmo que o token ainda não tenha expirado
+- **Poda**: job diário `delete_expired_refresh_tokens` apaga linhas com `expires_at` vencido ou com a sessão acima do limite absoluto
 - **Revogação**: `/logout` apaga a linha do refresh apresentado; `/reset-password` marca `password_changed_at` e apaga todas as linhas do usuário; `/{id}/change-password` mantém o refresh da sessão atual e apaga as demais (admin trocando a senha de outro usuário apaga todas as sessões do alvo)
 - **Troca de senha**: quando o próprio usuário troca, a resposta devolve um `access_token` novo, porque todos os access tokens emitidos antes da troca são rejeitados pelo `iat`; quando um admin troca a senha de outra pessoa, `access_token` vem `null` (a sessão do admin não muda)
 - **Cookie settings**: `secure`, `httponly`, `samesite`, `max_age` e `expires` (datetime) from Settings
@@ -132,8 +133,9 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 ### Auth (`internum/modules/auth/`)
 - **Endpoints**: `/token`, `/refresh_token`, `/logout`, `/forgot-password`, `/reset-password`
 - **Services**: `services.py` concentra emissão, rotação e revogação de refresh (`issue_refresh_token`, `rotate_refresh_token`, `delete_refresh_token`, `delete_user_tokens` com `keep_jti` opcional, `refresh_token_jti`)
-- **Modelos**: `RefreshToken` (`jti`, `user_id`, `expires_at`, `rotated_at`, `created_at`) e `PasswordResetToken`
+- **Modelos**: `RefreshToken` (`jti`, `user_id`, `expires_at`, `session_started_at`, `rotated_at`, `created_at`) e `PasswordResetToken`
 - **Password reset**: Token with `purpose='password_reset'`, stored in `PasswordResetToken` model
+- **Jobs**: `delete_expired_reset_tokens` e `delete_expired_refresh_tokens` (APScheduler, diário)
 - **Email**: `EmailService` (Mailtrap) with HTML templates
 
 ### Vacation (`internum/modules/vacation/`)
@@ -252,6 +254,7 @@ poetry run alembic upgrade head
 | `internum/core/database.py` | Async engine + session factory |
 | `internum/core/security.py` | JWT, passwords, get_current_user |
 | `internum/modules/auth/services.py` | Emissão, rotação e revogação de refresh tokens |
+| `internum/modules/auth/jobs.py` | Poda diária de reset tokens e refresh tokens expirados |
 | `internum/core/permissions.py` | Permission dependencies |
 | `internum/core/models/registry.py` | SQLAlchemy registry |
 | `internum/core/models/mixins.py` | AuditMixin |

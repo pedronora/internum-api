@@ -4,9 +4,10 @@ import pytest
 from sqlalchemy import select
 
 from internum.modules.auth.jobs import (
+    _delete_expired_refresh_tokens,  # noqa: PLC2701
     _delete_expired_reset_tokens,  # noqa: PLC2701
 )
-from internum.modules.auth.models import PasswordResetToken
+from internum.modules.auth.models import PasswordResetToken, RefreshToken
 from internum.modules.library.jobs import _mark_overdue_loans  # noqa: PLC2701
 from internum.modules.library.models import Book, Loan, LoanStatus
 
@@ -90,6 +91,48 @@ async def test_delete_expired_tokens_only_used(session, user):
 
     remaining_tokens = await session.scalars(select(PasswordResetToken))
     assert len(remaining_tokens.all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_refresh_tokens(session, user):
+    now = datetime.now(UTC)
+
+    expired = RefreshToken(
+        jti='a' * 32,
+        user_id=user.id,
+        expires_at=now - timedelta(days=1),
+        session_started_at=now - timedelta(days=8),
+    )
+
+    over_absolute_limit = RefreshToken(
+        jti='b' * 32,
+        user_id=user.id,
+        expires_at=now + timedelta(days=6),
+        session_started_at=now - timedelta(days=8),
+    )
+
+    active = RefreshToken(
+        jti='c' * 32,
+        user_id=user.id,
+        expires_at=now + timedelta(days=3),
+        session_started_at=now - timedelta(days=3),
+    )
+
+    session.add_all([expired, over_absolute_limit, active])
+    await session.commit()
+
+    await _delete_expired_refresh_tokens(session)
+
+    remaining = await session.scalars(select(RefreshToken))
+    assert [token.jti for token in remaining.all()] == ['c' * 32]
+
+
+@pytest.mark.asyncio
+async def test_delete_expired_refresh_tokens_empty(session):
+    await _delete_expired_refresh_tokens(session)
+
+    remaining = await session.scalars(select(RefreshToken))
+    assert remaining.all() == []
 
 
 @pytest.mark.asyncio

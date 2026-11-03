@@ -3,7 +3,10 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from internum.modules.auth.jobs import delete_expired_reset_tokens
+from internum.modules.auth.jobs import (
+    delete_expired_refresh_tokens,
+    delete_expired_reset_tokens,
+)
 from internum.modules.library.jobs import check_overdue_loans
 from internum.modules.vacation.jobs import ensure_accrual_periods_job
 
@@ -25,6 +28,13 @@ def start_scheduler():
         CronTrigger(hour=00, minute=00, timezone=timezone_sp),
         id='delete_expired_tokens',
         name='Deletar tokens expirados',
+    )
+
+    scheduler.add_job(
+        delete_expired_refresh_tokens,
+        CronTrigger(hour=00, minute=00, timezone=timezone_sp),
+        id='delete_expired_refresh_tokens',
+        name='Deletar refresh tokens expirados',
     )
 
     scheduler.add_job(
