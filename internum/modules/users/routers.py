@@ -1,8 +1,9 @@
 import math
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,11 +18,20 @@ from internum.core.authorization import (
 )
 from internum.core.database import get_session
 from internum.core.permissions import DENIED, CurrentUser, require_permission
-from internum.core.security import get_password_hash, verify_password
+from internum.core.security import (
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
+from internum.core.settings import Settings
+from internum.modules.auth.services import (
+    delete_user_tokens,
+    refresh_token_jti,
+)
 from internum.modules.users.enums import Role
 from internum.modules.users.models import User, UserRole
 from internum.modules.users.schemas import (
-    Message,
+    ChangePasswordResponse,
     PageMeta,
     PaginatedUserDirectory,
     PaginatedUserList,
@@ -35,6 +45,7 @@ from internum.modules.users.schemas import (
 )
 
 router = APIRouter(prefix='/users', tags=['Users'])
+settings = Settings()
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
@@ -428,12 +439,13 @@ async def deactivate_user(
 
 @router.post(
     '/{user_id}/change-password',
-    response_model=Message,
+    response_model=ChangePasswordResponse,
     status_code=HTTPStatus.OK,
 )
 async def change_password(
     user_id: int,
     passwords: UserChangePassword,
+    request: Request,
     session: Session,
     current_user: CurrentUser,
 ):
@@ -460,7 +472,25 @@ async def change_password(
             detail='Senha nova igual à atual.',
         )
 
+    is_self = current_user.id == db_user.id
+    keep_jti = (
+        refresh_token_jti(request.cookies.get(settings.REFRESH_COOKIE_NAME))
+        if is_self
+        else None
+    )
+
     db_user.password = get_password_hash(passwords.new_password)
+    db_user.password_changed_at = datetime.now(UTC)
+    await delete_user_tokens(session, db_user.id, keep_jti=keep_jti)
     await session.commit()
 
-    return {'message': 'Senha alterada com sucesso'}
+    access_token = (
+        create_access_token(data={'sub': db_user.username})
+        if is_self
+        else None
+    )
+
+    return {
+        'message': 'Senha alterada com sucesso',
+        'access_token': access_token,
+    }

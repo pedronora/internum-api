@@ -38,8 +38,9 @@ def create_access_token(
     purpose: str | None = None,
 ):
     to_encode = data.copy()
-    expire = _now_utc() + timedelta(minutes=expire_minutes)
-    to_encode.update({'exp': expire, 'type': 'access'})
+    now = _now_utc()
+    expire = now + timedelta(minutes=expire_minutes)
+    to_encode.update({'exp': expire, 'iat': now, 'type': 'access'})
 
     if purpose:
         to_encode['purpose'] = purpose
@@ -145,5 +146,16 @@ async def get_current_user(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f'Não encontrado usuário com id ({user.id}).',
         )
+
+    issued_at = payload.get('iat')
+
+    if not isinstance(issued_at, (int, float)):
+        raise credentials_exception
+
+    if (
+        user.password_changed_at is not None
+        and issued_at + 1 < user.password_changed_at.timestamp()
+    ):
+        raise credentials_exception
 
     return user

@@ -259,6 +259,7 @@ async def reset_password(data: ResetPasswordRequest, session: Session):
         )
 
     db_user.password = get_password_hash(data.new_password)
+    db_user.password_changed_at = datetime.now(UTC)
     db_token.used = True
     await delete_user_tokens(session, db_user.id)
     await session.commit()

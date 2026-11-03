@@ -1,12 +1,16 @@
 from http import HTTPStatus
 from uuid import uuid4
 
+from freezegun import freeze_time
+
+from internum.core.settings import Settings
 from internum.modules.users.enums import Role
 from internum.modules.users.models import User
 from internum.modules.users.schemas import UserRead
 
 ENDPOINT_URL = '/api/v1/users'
 GROSS_SALARY = 5200.50
+settings = Settings()
 
 
 def build_test_password() -> str:
@@ -32,6 +36,14 @@ def build_payload(**overrides) -> dict:
 
 def auth(token: str) -> dict:
     return {'Authorization': f'Bearer {token}'}
+
+
+def refresh_with(client, refresh_token: str):
+    client.cookies.clear()
+    return client.post(
+        '/api/v1/auth/refresh_token',
+        headers={'Cookie': f'{settings.REFRESH_COOKIE_NAME}={refresh_token}'},
+    )
 
 
 def test_create_user(client, mock_db_time, token_admin):
@@ -745,6 +757,172 @@ def test_admin_change_other_user_password(client, other_user, token_admin):
     )
 
     assert response.status_code == HTTPStatus.OK
+
+
+def test_change_pwd_retorna_novo_access_token(client, user, token):
+    response = client.post(
+        f'{ENDPOINT_URL}/{user.id}/change-password',
+        headers=auth(token),
+        json={
+            'old_password': user.clean_password,
+            'new_password': build_test_password(),
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    new_token = response.json()['access_token']
+
+    assert new_token
+    assert (
+        client.get(f'{ENDPOINT_URL}/me', headers=auth(new_token)).status_code
+        == HTTPStatus.OK
+    )
+
+
+def test_change_pwd_invalida_access_token_anterior(client, user):
+    with freeze_time('2025-09-17 12:00:00') as frozen:
+        login = client.post(
+            '/api/v1/auth/token',
+            data={
+                'username': user.username,
+                'password': user.clean_password,
+            },
+        )
+        old_token = login.json()['access_token']
+
+        frozen.move_to('2025-09-17 12:00:05.500000')
+
+        response = client.post(
+            f'{ENDPOINT_URL}/{user.id}/change-password',
+            headers=auth(old_token),
+            json={
+                'old_password': user.clean_password,
+                'new_password': build_test_password(),
+            },
+        )
+        assert response.status_code == HTTPStatus.OK
+        new_token = response.json()['access_token']
+
+        assert (
+            client.get(
+                f'{ENDPOINT_URL}/me', headers=auth(new_token)
+            ).status_code
+            == HTTPStatus.OK
+        )
+        assert (
+            client.get(
+                f'{ENDPOINT_URL}/me', headers=auth(old_token)
+            ).status_code
+            == HTTPStatus.UNAUTHORIZED
+        )
+
+
+def test_change_pwd_mantem_refresh_da_sessao_atual(client, user, token):
+    refresh_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    response = client.post(
+        f'{ENDPOINT_URL}/{user.id}/change-password',
+        headers=auth(token),
+        json={
+            'old_password': user.clean_password,
+            'new_password': build_test_password(),
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert refresh_with(client, refresh_token).status_code == HTTPStatus.OK
+
+
+def test_change_pwd_revoga_outras_sessoes(client, user):
+    credentials = {
+        'username': user.username,
+        'password': user.clean_password,
+    }
+
+    with freeze_time('2025-09-17 12:00:00') as frozen:
+        first = client.post('/api/v1/auth/token', data=credentials)
+        first_access = first.json()['access_token']
+        first_refresh = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+        second = client.post('/api/v1/auth/token', data=credentials)
+        second_access = second.json()['access_token']
+        second_refresh = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+        frozen.move_to('2025-09-17 12:00:05')
+
+        response = client.post(
+            f'{ENDPOINT_URL}/{user.id}/change-password',
+            headers=auth(second_access),
+            json={
+                'old_password': user.clean_password,
+                'new_password': build_test_password(),
+            },
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        assert (
+            refresh_with(client, first_refresh).status_code
+            == HTTPStatus.UNAUTHORIZED
+        )
+        assert (
+            refresh_with(client, second_refresh).status_code == HTTPStatus.OK
+        )
+        assert (
+            client.get(
+                f'{ENDPOINT_URL}/me', headers=auth(first_access)
+            ).status_code
+            == HTTPStatus.UNAUTHORIZED
+        )
+
+
+def test_admin_change_pwd_revoga_sessoes_do_alvo(
+    client, user_admin, other_user
+):
+    with freeze_time('2025-09-17 12:00:00') as frozen:
+        admin_login = client.post(
+            '/api/v1/auth/token',
+            data={
+                'username': user_admin.username,
+                'password': user_admin.clean_password,
+            },
+        )
+        admin_access = admin_login.json()['access_token']
+        admin_refresh = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+        target_login = client.post(
+            '/api/v1/auth/token',
+            data={
+                'username': other_user.username,
+                'password': other_user.clean_password,
+            },
+        )
+        target_access = target_login.json()['access_token']
+        target_refresh = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+        frozen.move_to('2025-09-17 12:00:05')
+
+        response = client.post(
+            f'{ENDPOINT_URL}/{other_user.id}/change-password',
+            headers=auth(admin_access),
+            json={
+                'old_password': other_user.clean_password,
+                'new_password': build_test_password(),
+            },
+        )
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()['access_token'] is None
+
+        assert (
+            refresh_with(client, target_refresh).status_code
+            == HTTPStatus.UNAUTHORIZED
+        )
+        assert refresh_with(client, admin_refresh).status_code == HTTPStatus.OK
+        assert (
+            client.get(
+                f'{ENDPOINT_URL}/me', headers=auth(target_access)
+            ).status_code
+            == HTTPStatus.UNAUTHORIZED
+        )
 
 
 def test_role_is_job_not_permission_source(client, user, token):

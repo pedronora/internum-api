@@ -215,3 +215,7 @@ class UserQueryParams(BaseModel):
 
 class Message(BaseModel):
     message: str
+
+
+class ChangePasswordResponse(Message):
+    access_token: str | None = None

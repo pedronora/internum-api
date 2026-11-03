@@ -22,6 +22,10 @@ def _refresh_with(client, refresh_token):
     )
 
 
+def _auth(token):
+    return {'Authorization': f'Bearer {token}'}
+
+
 def test_get_token(client, user):
     response = client.post(
         ENDPOINT_URL + '/token',
@@ -426,6 +430,48 @@ async def test_reset_password_revoga_refresh_tokens(
         _refresh_with(client, refresh_token).status_code
         == HTTPStatus.UNAUTHORIZED
     )
+
+
+@pytest.mark.asyncio
+async def test_reset_password_invalida_access_token_anterior(
+    client, session, user, token_factory
+):
+    with freeze_time('2025-09-17 12:00:00') as frozen:
+        login = client.post(
+            f'{ENDPOINT_URL}/token',
+            data={
+                'username': user.username,
+                'password': user.clean_password,
+            },
+        )
+        old_access = login.json()['access_token']
+
+        frozen.move_to('2025-09-17 12:00:05.500000')
+
+        token_reset = token_factory(user.id, purpose='password_reset')
+        session.add(
+            PasswordResetToken(
+                user_id=user.id,
+                token=token_reset,
+                expires_at=datetime.now(UTC)
+                + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
+                used=False,
+            )
+        )
+        await session.commit()
+
+        response = client.post(
+            f'{ENDPOINT_URL}/reset-password',
+            json={
+                'token': token_reset,
+                'new_password': '@novaSenhaDiferente123',
+            },
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        protected = client.get('/api/v1/users/me', headers=_auth(old_access))
+
+    assert protected.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_refresh_token_expirado(client, user):
