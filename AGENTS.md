@@ -84,11 +84,12 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 ### 8. Authentication (JWT)
 - **Access token**: Short-lived (configurable minutes), in Authorization header; payload tem `type='access'`
 - **Refresh token**: Long-lived (days), in HttpOnly cookie (`REFRESH_COOKIE_NAME`) e persistido em `refresh_tokens`
-- **Validação do access**: `get_current_user` exige `type='access'` e rejeita token com `purpose` (token de reset não vira sessão)
+- **Validação do access**: `get_current_user` exige `type='access'`, rejeita token com `purpose` (token de reset não vira sessão) e exige `iat` posterior a `users.password_changed_at` (tolerância de 1s por causa da precisão em segundos do `iat`)
 - **Rotação**: `/refresh_token` consome o token atual (`SELECT ... FOR UPDATE`) e emite um novo; reuso de token com `rotated_at` preenchido apaga todas as sessões do usuário
-- **Revogação**: `/logout` apaga a linha do refresh apresentado; `/reset-password` apaga todas as linhas do usuário
+- **Revogação**: `/logout` apaga a linha do refresh apresentado; `/reset-password` marca `password_changed_at` e apaga todas as linhas do usuário; `/{id}/change-password` mantém o refresh da sessão atual e apaga as demais (admin trocando a senha de outro usuário apaga todas as sessões do alvo)
+- **Troca de senha**: a resposta devolve um `access_token` novo, porque todos os access tokens emitidos antes da troca são rejeitados pelo `iat`
 - **Cookie settings**: `secure`, `httponly`, `samesite`, `max_age` e `expires` (datetime) from Settings
-- **Token payload**: `sub` (username), `exp`, `type` ('access'/'refresh'), optional `purpose`
+- **Token payload**: `sub` (username), `exp`, `iat`, `type` ('access'/'refresh'), optional `purpose`
 - **Purpose/type validation**: `decode_token(token, expected_purpose='password_reset', expected_type='refresh')`
 - **Docs**: `/docs`, `/redoc` e `/openapi.json` só existem com `DOCS_ENABLED=True`
 
@@ -125,10 +126,12 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **Aprovação**: por permissão (`vacation:manage_all`), não por setor; ver `docs/authorization.md`
 - **Schemas**: `UserRead` (sensível), `UserPublic` (diretório sem CPF/salário) e `UserSelf` (`roles` + `permissions`)
 - **Edição por campo**: `_apply_field_updates` valida a permissão de cada campo; ninguém edita os próprios perfis; último admin ativo é protegido
+- **Troca de senha**: `POST /{id}/change-password` grava `password_changed_at`, revoga os refresh de outras sessões (preserva o `jti` do cookie atual quando é o próprio usuário) e devolve um `access_token` novo
+- **Revogação de access**: `password_changed_at` (coluna nullable em `users`) é a referência para invalidar tokens emitidos antes da troca/reset; backfill na migration marca todos os usuários existentes
 
 ### Auth (`internum/modules/auth/`)
 - **Endpoints**: `/token`, `/refresh_token`, `/logout`, `/forgot-password`, `/reset-password`
-- **Services**: `services.py` concentra emissão, rotação e revogação de refresh (`issue_refresh_token`, `rotate_refresh_token`, `delete_refresh_token`, `delete_user_tokens`)
+- **Services**: `services.py` concentra emissão, rotação e revogação de refresh (`issue_refresh_token`, `rotate_refresh_token`, `delete_refresh_token`, `delete_user_tokens` com `keep_jti` opcional, `refresh_token_jti`)
 - **Modelos**: `RefreshToken` (`jti`, `user_id`, `expires_at`, `rotated_at`, `created_at`) e `PasswordResetToken`
 - **Password reset**: Token with `purpose='password_reset'`, stored in `PasswordResetToken` model
 - **Email**: `EmailService` (Mailtrap) with HTML templates

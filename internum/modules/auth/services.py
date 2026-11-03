@@ -94,7 +94,24 @@ async def delete_refresh_token(session: AsyncSession, token: str) -> None:
     await session.commit()
 
 
-async def delete_user_tokens(session: AsyncSession, user_id: int) -> None:
-    await session.execute(
-        delete(RefreshToken).where(RefreshToken.user_id == user_id)
-    )
+async def delete_user_tokens(
+    session: AsyncSession, user_id: int, keep_jti: str | None = None
+) -> None:
+    stmt = delete(RefreshToken).where(RefreshToken.user_id == user_id)
+
+    if keep_jti is not None:
+        stmt = stmt.where(RefreshToken.jti != keep_jti)
+
+    await session.execute(stmt)
+
+
+def refresh_token_jti(token: str | None) -> str | None:
+    if not token:
+        return None
+
+    try:
+        payload = decode_token(token, expected_type='refresh')
+    except (InvalidTokenError, HTTPException):
+        return None
+
+    return payload.get('jti')

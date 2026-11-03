@@ -53,6 +53,9 @@ class User:
     )
 
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, init=False
+    )
 
     role_assignments: Mapped[list['UserRole']] = relationship(
         back_populates='user',
