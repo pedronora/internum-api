@@ -39,7 +39,7 @@ def create_access_token(
 ):
     to_encode = data.copy()
     expire = _now_utc() + timedelta(minutes=expire_minutes)
-    to_encode.update({'exp': expire})
+    to_encode.update({'exp': expire, 'type': 'access'})
 
     if purpose:
         to_encode['purpose'] = purpose
@@ -112,6 +112,9 @@ async def get_current_user(
         subject_username = payload.get('sub')
 
         if not subject_username:
+            raise credentials_exception
+
+        if payload.get('type') != 'access' or payload.get('purpose'):
             raise credentials_exception
 
     except DecodeError:
