@@ -15,9 +15,8 @@ from pydantic import (
 
 from internum.core.authorization import Permission
 from internum.modules.users.enums import Role, Unidade
+from internum.utils.validators import validate_password_complexity
 
-MIN_LENGTH_PWD = 8
-MAX_LENGTH_PWD = 64
 CPF_LENGTH = 11
 CPF_FIRST_WEIGHT = 10
 CPF_SECOND_WEIGHT = 11
@@ -55,22 +54,6 @@ def validate_cpf(cpf: str) -> str:
         raise ValueError('CPF inválido.')
 
     return digits
-
-
-def validate_password_complexity(pwd: str) -> str:
-    if len(pwd) < MIN_LENGTH_PWD or len(pwd) > MAX_LENGTH_PWD:
-        raise ValueError('A senha deve ter entre 8 e 64 caracteres.')
-    if not any(char.isdigit() for char in pwd):
-        raise ValueError('A senha deve conter pelo menos um dígito.')
-    if not any(char.islower() for char in pwd):
-        raise ValueError('A senha deve conter pelo menos uma letra minúscula.')
-    if not any(char.isupper() for char in pwd):
-        raise ValueError('A senha deve conter pelo menos uma letra maiúscula.')
-    if not any(not char.isalnum() for char in pwd):
-        raise ValueError(
-            'A senha deve conter pelo menos um caractere especial.'
-        )
-    return pwd
 
 
 def validate_phone(phone: str) -> str | None:

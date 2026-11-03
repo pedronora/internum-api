@@ -189,11 +189,31 @@ def test_reset_password_invalid_token(client):
         f'{ENDPOINT_URL}/reset-password',
         json={
             'token': 'token totalmente inválido',
-            'new_password': 'aaaaaa',
+            'new_password': '@SenhaValida123',
         },
     )
     assert response.status_code == HTTPStatus.UNAUTHORIZED
     assert response.json() == {'detail': 'Token inválido.'}
+
+
+@pytest.mark.parametrize(
+    'weak_password',
+    [
+        'Ab1!xyz',
+        'Abcdefg!',
+        'ABCDEFG1!',
+        'abcdefg1!',
+        'Abcdefg1',
+        'Aa1!' + 'a' * 61,
+    ],
+)
+def test_reset_password_senha_fraca(client, weak_password):
+    response = client.post(
+        f'{ENDPOINT_URL}/reset-password',
+        json={'token': 'token-invalido', 'new_password': weak_password},
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 @pytest.mark.asyncio
@@ -245,7 +265,7 @@ async def test_reset_password_expired_token(
     with freeze_time('2025-01-01 10:06:00'):
         response = client.post(
             f'{ENDPOINT_URL}/reset-password',
-            json={'token': token, 'new_password': 'aaaaaa'},
+            json={'token': token, 'new_password': '@SenhaValida123'},
         )
 
         assert response.status_code == HTTPStatus.UNAUTHORIZED
@@ -301,7 +321,7 @@ async def test_reset_password_user_not_found(
 
     response = client.post(
         f'{ENDPOINT_URL}/reset-password',
-        json={'token': token, 'new_password': 'aaaaaa'},
+        json={'token': token, 'new_password': '@SenhaValida123'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND

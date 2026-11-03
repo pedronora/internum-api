@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
+
+from internum.utils.validators import validate_password_complexity
 
 
 class Token(BaseModel):
@@ -9,6 +11,10 @@ class Token(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+    _validate_password = validator('new_password', allow_reuse=True)(
+        validate_password_complexity
+    )
 
 
 class ForgotPasswordRequest(BaseModel):
