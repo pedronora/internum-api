@@ -3,13 +3,23 @@ from http import HTTPStatus
 
 import pytest
 from freezegun import freeze_time
+from sqlalchemy import select
 
 from internum.core.settings import Settings
-from internum.modules.auth.models import PasswordResetToken
+from internum.modules.auth.models import PasswordResetToken, RefreshToken
 
 settings = Settings()
 
 ENDPOINT_URL = '/api/v1/auth'
+
+
+def _refresh_with(client, refresh_token):
+    return client.post(
+        f'{ENDPOINT_URL}/refresh_token',
+        headers={
+            'Cookie': (f'{settings.REFRESH_COOKIE_NAME}={refresh_token}')
+        },
+    )
 
 
 def test_get_token(client, user):
@@ -296,3 +306,120 @@ async def test_reset_password_user_not_found(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {'detail': 'Usuário não encontrado.'}
+
+
+@pytest.mark.asyncio
+async def test_login_persiste_refresh_token(client, session, user):
+    response = client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+
+    db_token = await session.scalar(
+        select(RefreshToken).where(RefreshToken.user_id == user.id)
+    )
+
+    assert db_token is not None
+    assert db_token.rotated_at is None
+
+
+def test_refresh_rotaciona_token(client, user):
+    client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    old_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    response = client.post(f'{ENDPOINT_URL}/refresh_token')
+
+    assert response.status_code == HTTPStatus.OK
+    assert client.cookies.get(settings.REFRESH_COOKIE_NAME) != old_token
+
+
+def test_reuso_de_refresh_token_encerra_sessoes(client, user):
+    client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    old_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    client.post(f'{ENDPOINT_URL}/refresh_token')
+    new_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    replay = _refresh_with(client, old_token)
+    assert replay.status_code == HTTPStatus.UNAUTHORIZED
+
+    response = _refresh_with(client, new_token)
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_logout_invalida_refresh_token_no_servidor(client, user):
+    client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    refresh_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    response = client.post(f'{ENDPOINT_URL}/logout')
+    assert response.status_code == HTTPStatus.NO_CONTENT
+
+    assert (
+        _refresh_with(client, refresh_token).status_code
+        == HTTPStatus.UNAUTHORIZED
+    )
+
+
+@pytest.mark.asyncio
+async def test_reset_password_revoga_refresh_tokens(
+    client, session, user, token_factory
+):
+    client.post(
+        f'{ENDPOINT_URL}/token',
+        data={'username': user.username, 'password': user.clean_password},
+    )
+    refresh_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    token_reset = token_factory(user.id, purpose='password_reset')
+    session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token=token_reset,
+            expires_at=datetime.now(UTC)
+            + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
+            used=False,
+        )
+    )
+    await session.commit()
+
+    response = client.post(
+        f'{ENDPOINT_URL}/reset-password',
+        json={
+            'token': token_reset,
+            'new_password': '@novaSenhaDiferente123',
+        },
+    )
+    assert response.status_code == HTTPStatus.OK
+
+    assert (
+        _refresh_with(client, refresh_token).status_code
+        == HTTPStatus.UNAUTHORIZED
+    )
+
+
+def test_refresh_token_expirado(client, user):
+    with freeze_time('2025-09-18 12:00:00'):
+        client.post(
+            f'{ENDPOINT_URL}/token',
+            data={
+                'username': user.username,
+                'password': user.clean_password,
+            },
+        )
+        refresh_token = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    with freeze_time('2025-09-26 12:00:00'):
+        response = _refresh_with(client, refresh_token)
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
