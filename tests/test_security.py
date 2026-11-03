@@ -2,7 +2,7 @@ from http import HTTPStatus
 
 from jwt import decode
 
-from internum.core.security import create_access_token
+from internum.core.security import create_access_token, create_refresh_token
 from internum.core.settings import Settings
 
 settings = Settings()
@@ -19,6 +19,7 @@ def test_jwt():
     )
 
     assert decoded['teste'] == data['teste']
+    assert decoded['type'] == 'access'
     assert 'exp' in decoded
 
 
@@ -32,3 +33,25 @@ def test_jwt_invalid_token(client):
     assert response.json() == {
         'detail': 'Não foi possível validar as credenciais'
     }
+
+
+def test_refresh_token_nao_autentica_como_access(client, user):
+    token = create_refresh_token(data={'sub': user.username})
+
+    response = client.get(
+        f'{ENDPOINT_URL}/users/me',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_token_de_reset_nao_autentica_como_access(client, user, token_factory):
+    token = token_factory(user.id)
+
+    response = client.get(
+        f'{ENDPOINT_URL}/users/me',
+        headers={'Authorization': f'Bearer {token}'},
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
