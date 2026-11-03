@@ -20,7 +20,6 @@ from internum.core.database import get_session
 from internum.core.email import EmailService
 from internum.core.security import (
     create_access_token,
-    create_refresh_token,
     decode_token,
     get_password_hash,
     verify_password,
@@ -33,6 +32,12 @@ from internum.modules.auth.schemas import (
     ResetPasswordRequest,
     Token,
 )
+from internum.modules.auth.services import (
+    delete_refresh_token,
+    delete_user_tokens,
+    issue_refresh_token,
+    rotate_refresh_token,
+)
 from internum.modules.auth.templates import password_reset_template
 from internum.modules.users.models import User
 
@@ -43,6 +48,20 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 settings = Settings()
 email_service = EmailService()
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=settings.SECURE_COOKIE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+        max_age=settings.REFRESH_COOKIE_MAX_AGE,
+        expires=datetime.now(UTC)
+        + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        path=settings.REFRESH_COOKIE_PATH,
+    )
 
 
 @router.post('/token', response_model=Token)
@@ -68,18 +87,11 @@ async def login_for_access_token(
         )
 
     access_token = create_access_token(data={'sub': user.username})
-    refresh_token = create_refresh_token(data={'sub': user.username})
+    refresh_token = await issue_refresh_token(session, user)
+    await session.commit()
 
-    response.set_cookie(
-        key=settings.REFRESH_COOKIE_NAME,
-        value=refresh_token,
-        httponly=True,
-        secure=settings.SECURE_COOKIE,
-        samesite=settings.REFRESH_COOKIE_SAMESITE,
-        max_age=settings.REFRESH_COOKIE_MAX_AGE,
-        expires=settings.REFRESH_COOKIE_MAX_AGE,
-        path=settings.REFRESH_COOKIE_PATH,
-    )
+    _set_refresh_cookie(response, refresh_token)
+
     return {'access_token': access_token, 'token_type': 'bearer'}
 
 
@@ -97,38 +109,23 @@ async def refresh_access_token(
             detail='Refresh token ausente',
         )
 
-    try:
-        payload = decode_token(refresh_token)
-    except HTTPException as exc:
-        raise exc
-
-    if payload.get('type') != 'refresh':
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED,
-            detail='Token inválido para refresh',
-        )
-
-    subject_username = payload.get('sub')
-    if not subject_username:
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED, detail='Token inválido'
-        )
-
-    user = await session.scalar(
-        select(User).where(User.username == subject_username)
+    new_refresh_token, user = await rotate_refresh_token(
+        session, refresh_token
     )
-    if not user or not user.active:
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED, detail='Usuário inválido'
-        )
 
     new_access_token = create_access_token(data={'sub': user.username})
+    _set_refresh_cookie(response, new_refresh_token)
 
     return {'access_token': new_access_token, 'token_type': 'bearer'}
 
 
 @router.post('/logout', status_code=HTTPStatus.NO_CONTENT)
-async def logout(response: Response):
+async def logout(request: Request, response: Response, session: Session):
+    refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+
+    if refresh_token:
+        await delete_refresh_token(session, refresh_token)
+
     response.delete_cookie(
         key=settings.REFRESH_COOKIE_NAME,
         path=settings.REFRESH_COOKIE_PATH,
@@ -263,6 +260,7 @@ async def reset_password(data: ResetPasswordRequest, session: Session):
 
     db_user.password = get_password_hash(data.new_password)
     db_token.used = True
+    await delete_user_tokens(session, db_user.id)
     await session.commit()
 
     return {'message': 'Senha redefinida com sucesso.'}

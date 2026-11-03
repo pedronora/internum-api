@@ -52,11 +52,11 @@ def create_access_token(
 
 
 def create_refresh_token(
-    data: dict, expire_minutes: int = settings.REFRESH_TOKEN_EXPIRE_DAYS
+    data: dict, expire_days: int = settings.REFRESH_TOKEN_EXPIRE_DAYS
 ):
     to_encode = data.copy()
     jti = uuid.uuid4().hex
-    expire = _now_utc() + timedelta(expire_minutes)
+    expire = _now_utc() + timedelta(days=expire_days)
 
     to_encode.update({'exp': expire, 'jti': jti, 'type': 'refresh'})
     encoded_jwt = encode(
@@ -73,11 +73,19 @@ def verify_password(plain_password: str, hashed_password: str):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def decode_token(token: str, expected_purpose: str | None = None):
+def decode_token(
+    token: str,
+    expected_purpose: str | None = None,
+    expected_type: str | None = None,
+):
     try:
         payload = decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
+
+        if expected_type is not None:
+            if payload.get('type') != expected_type:
+                raise InvalidTokenError('Tipo do token inválido.')
 
         if expected_purpose is not None:
             token_purpose = payload.get('purpose')
