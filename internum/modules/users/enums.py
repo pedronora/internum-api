@@ -8,7 +8,6 @@ class Unidade(str, Enum):
 
 
 class Role(str, Enum):
-    ADMIN = 'admin'
     OFICIAL = 'oficial'
     SUBOFICIAL = 'suboficial'
     COORD_REGISTRO = 'coord_registro'

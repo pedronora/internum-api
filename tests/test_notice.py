@@ -16,19 +16,19 @@ class NoticeFactory(factory.Factory):
     content = factory.Faker('text')
 
 
-def test_create_notice(client, user_admin, token_admin):
+def test_create_notice(client, user_oficial, token_oficial):
     new_notice = {'title': 'Aviso teste', 'content': 'Conteúdo do aviso teste'}
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_notice,
     )
 
     assert response.status_code == HTTPStatus.CREATED
     assert response.json()['title'] == new_notice['title']
     assert response.json()['content'] == new_notice['content']
-    assert response.json()['author']['name'] == user_admin.name
+    assert response.json()['author']['name'] == user_oficial.name
 
 
 def test_create_notice_without_permission(client, user, token):
@@ -43,7 +43,7 @@ def test_create_notice_without_permission(client, user, token):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_create_notice_sanitizes_content(client, user_admin, token_admin):
+def test_create_notice_sanitizes_content(client, user_oficial, token_oficial):
     new_notice = {
         'title': 'Aviso com HTML',
         'content': (
@@ -56,7 +56,7 @@ def test_create_notice_sanitizes_content(client, user_admin, token_admin):
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_notice,
     )
 
@@ -68,24 +68,24 @@ def test_create_notice_sanitizes_content(client, user_admin, token_admin):
     assert 'onerror' not in content
 
 
-def test_create_notice_value_missing(client, user_admin, token_admin):
+def test_create_notice_value_missing(client, user_oficial, token_oficial):
     new_notice = {'title': '', 'content': 'Conteúdo do aviso teste'}
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_notice,
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_create_notice_data_missing_field(client, user_admin, token_admin):
+def test_create_notice_data_missing_field(client, user_oficial, token_oficial):
     new_notice = {'content': 'Conteúdo do aviso teste'}
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_notice,
     )
 
@@ -98,10 +98,10 @@ def test_create_notice_data_missing_field(client, user_admin, token_admin):
 
 @pytest.mark.asyncio
 async def test_list_notices_should_return_5(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     expected_notices = 5
-    user_id = user_admin.id
+    user_id = user_oficial.id
 
     notices_list = NoticeFactory.create_batch(5)
 
@@ -113,7 +113,7 @@ async def test_list_notices_should_return_5(
 
     response = client.get(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert len(response.json()['notices']) == expected_notices
@@ -121,10 +121,10 @@ async def test_list_notices_should_return_5(
 
 @pytest.mark.asyncio
 async def test_list_unreads_notices_should_return_5(
-    session, client, user, user_admin, token
+    session, client, user, user_oficial, token
 ):
     expected_notices = 5
-    user_id = user_admin.id
+    user_id = user_oficial.id
 
     notices_list = NoticeFactory.create_batch(5)
 
@@ -144,18 +144,18 @@ async def test_list_unreads_notices_should_return_5(
 
 @pytest.mark.asyncio
 async def test_list_notices_with_search_filter(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     notice_match = NoticeFactory.create(title='Aviso importante sobre sistema')
     notice_other = NoticeFactory.create(title='Outro título')
-    notice_match.created_by_id = notice_other.created_by_id = user_admin.id
+    notice_match.created_by_id = notice_other.created_by_id = user_oficial.id
 
     session.add_all([notice_match, notice_other])
     await session.commit()
 
     response = client.get(
         ENDPOINT_URL + '?search=sistema',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     data = response.json()
@@ -166,7 +166,7 @@ async def test_list_notices_with_search_filter(
 
 @pytest.mark.asyncio
 async def test_list_notices_with_pagination(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     pagination = 5
     total = 10
@@ -174,14 +174,14 @@ async def test_list_notices_with_pagination(
     notices_list = NoticeFactory.create_batch(total)
 
     for notice in notices_list:
-        notice.created_by_id = user_admin.id
+        notice.created_by_id = user_oficial.id
 
     session.add_all(notices_list)
     await session.commit()
 
     response = client.get(
         ENDPOINT_URL + f'?limit=5&offset={pagination}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     data = response.json()
@@ -192,11 +192,11 @@ async def test_list_notices_with_pagination(
 
 @pytest.mark.asyncio
 async def test_list_unreads_when_no_unread_notices(
-    session, client, user, user_admin, token
+    session, client, user, user_oficial, token
 ):
     notices_list = NoticeFactory.create_batch(3)
     for notice in notices_list:
-        notice.created_by_id = user_admin.id
+        notice.created_by_id = user_oficial.id
 
     session.add_all(notices_list)
     await session.commit()
@@ -287,9 +287,9 @@ def test_list_notices_unauthorized(client):
 
 
 @pytest.mark.asyncio
-async def test_get_notice_by_id(session, client, user, user_admin, token):
+async def test_get_notice_by_id(session, client, user, user_oficial, token):
     notice = NoticeFactory.create()
-    notice.created_by_id = user_admin.id
+    notice.created_by_id = user_oficial.id
     session.add(notice)
     await session.commit()
     await session.refresh(notice)
@@ -306,19 +306,19 @@ async def test_get_notice_by_id(session, client, user, user_admin, token):
 
 
 @pytest.mark.asyncio
-async def test_get_notice_not_found(client, token_admin):
+async def test_get_notice_not_found(client, token_oficial):
     response = client.get(
         ENDPOINT_URL + '/9909',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_mark_notice_as_read(session, client, user, user_admin, token):
+async def test_mark_notice_as_read(session, client, user, user_oficial, token):
     notice = NoticeFactory.create()
-    notice.created_by_id = user_admin.id
+    notice.created_by_id = user_oficial.id
     session.add(notice)
     await session.commit()
     await session.refresh(notice)
@@ -352,10 +352,10 @@ async def test_mark_read_returns_404_when_notice_not_found(client, token):
 
 @pytest.mark.asyncio
 async def test_mark_read_returns_409_when_already_marked_read(
-    session, client, user, user_admin, token
+    session, client, user, user_oficial, token
 ):
     notice = NoticeFactory()
-    notice.created_by_id = user_admin.id
+    notice.created_by_id = user_oficial.id
     session.add(notice)
     await session.commit()
     await session.refresh(notice)
@@ -376,47 +376,47 @@ async def test_mark_read_returns_409_when_already_marked_read(
 
 @pytest.mark.asyncio
 async def test_deactivate_notice_already_inactive(
-    session, client, token_admin, user_admin
+    session, client, token_oficial, user_oficial
 ):
     notice = Notice(
         title='Aviso inativo',
         content='...',
         active=False,
     )
-    notice.created_by_id = user_admin.id
+    notice.created_by_id = user_oficial.id
     session.add(notice)
     await session.commit()
     await session.refresh(notice)
 
     response = client.delete(
         f'{ENDPOINT_URL}/{notice.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_invalid_route_returns_404(client, token_admin):
+def test_invalid_route_returns_404(client, token_oficial):
     response = client.get(
         ENDPOINT_URL + '/nonexistent-route',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 @pytest.mark.asyncio
 async def test_deactivate_notice_success(
-    session, client, token_admin, user_admin
+    session, client, token_oficial, user_oficial
 ):
     notice = Notice(title='Aviso ativo', content='Conteúdo')
-    notice.created_by_id = user_admin.id
+    notice.created_by_id = user_oficial.id
     session.add(notice)
     await session.commit()
     await session.refresh(notice)
 
     response = client.delete(
         f'{ENDPOINT_URL}/{notice.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.NO_CONTENT
@@ -426,9 +426,9 @@ async def test_deactivate_notice_success(
 
 
 @pytest.mark.asyncio
-async def test_deactivate_notice_not_found(session, client, token_admin):
+async def test_deactivate_notice_not_found(session, client, token_oficial):
     response = client.delete(
         f'{ENDPOINT_URL}/9999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert response.status_code == HTTPStatus.NOT_FOUND

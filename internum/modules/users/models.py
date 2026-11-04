@@ -8,10 +8,12 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -92,6 +94,13 @@ class UserRole:
     __tablename__ = 'user_roles'
     __table_args__ = (
         UniqueConstraint('user_id', 'role', name='uq_user_roles_user_role'),
+        # A organização tem um único oficial; a conta é criada pelo seed.
+        Index(
+            'uq_user_roles_single_oficial',
+            'role',
+            unique=True,
+            postgresql_where=text("role = 'OFICIAL'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(init=False, primary_key=True)

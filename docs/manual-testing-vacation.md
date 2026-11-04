@@ -8,7 +8,7 @@ usando dados fictícios.
 ```bash
 poetry run task servicesUp      # sobe o Postgres
 poetry run alembic upgrade head # aplica migrações
-poetry run task seedAdmin       # cria o admin (se não existir)
+poetry run task seedOficial     # cria o oficial (se não existir)
 poetry run task run             # sobe a API em http://localhost:8000
 ```
 
@@ -25,7 +25,7 @@ CPFs abaixo são válidos.
 
 | Pessoa | username | senha | role | setor / subsetor | admissão |
 |---|---|---|---|---|---|
-| Pedro Nora (admin) | `pedronora` | (do `.env.development`) | admin | administrativo / Apoio | 2023-01-18 |
+| Pedro Nora (oficial) | `pedronora` | (do `.env.development`) | oficial | administrativo / Apoio | 2023-01-18 |
 | Marina Souza | `marinacoord` | `Feria@2026a` | coord | registro / Análise | 2022-05-10 |
 | João Silva | `joaosilva` | `Feria@2026b` | user | registro / Análise | 2024-03-01 |
 | Ana Costa | `anacosta` | `Feria@2026c` | user | registro / Conferência | **2021-07-15** (antiga → períodos expirados) |
@@ -35,7 +35,7 @@ CPFs: Marina `03102851606`, João `12716202605`, Ana `69312594311`, Carlos `8081
 
 ## Etapa 1 — Cadastro de usuários
 
-`POST /api/v1/users/` (com o token do admin). Exemplo (Marina):
+`POST /api/v1/users/` (com o token do oficial). Exemplo (Marina):
 
 ```json
 {
@@ -47,7 +47,7 @@ CPFs: Marina `03102851606`, João `12716202605`, Ana `69312594311`, Carlos `8081
 ```
 
 Repita para João, Ana e Carlos (`role`: `user`). Depois `GET /api/v1/users/` para
-conferir os `id`s (necessários nas rotas de admin). **Observe:** só admin pode criar outro admin.
+conferir os `id`s (necessários nas rotas administrativas). **Observe:** o perfil `oficial` é único e só pode ser criado pelo seed.
 
 ## Etapa 2 — Períodos aquisitivos (criação automática)
 
@@ -56,7 +56,7 @@ Faça login como **João** (`POST /auth/token`) e:
 - `GET /api/v1/vacation/accrual-periods` → lista P1 **expired**, P2 **concessive**,
   P3 **acquisitive** (gerados a partir de `hiring_date`). P2 é o que vamos usar.
 
-Como **admin**: `GET /vacation/accrual-periods/{joao_id}` e
+Como **oficial**: `GET /vacation/accrual-periods/{joao_id}` e
 `GET /vacation/accrual-periods/{joao_id}/{periodo_id}` (mesma visão + grants).
 
 ## Etapa 3 — Preview (validação CLT)
@@ -188,6 +188,6 @@ Login **Carlos** (user comum) e confirme 403 em:
   é exatamente o que o endpoint faz.
 - Os períodos aquisitivos são criados sob demanda (lazy) a partir de `hiring_date` e o status
   é sincronizado com `date.today()`.
-- Grants retroativo/dobro cadastrados por admin são **terminais**: já nascem
+- Grants retroativo/dobro cadastrados pelo RH são **terminais**: já nascem
   `FRUITED`/`PAID_DOUBLE`, somam em `days_enjoyed`/`days_double_paid` e não passam pela
   confirmação do RH (nem reservam dias).

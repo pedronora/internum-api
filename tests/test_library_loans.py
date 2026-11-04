@@ -26,12 +26,18 @@ class BookFactory(factory.Factory):
 
 @pytest.mark.asyncio
 async def test_loan_flow_success(
-    session, client, token, token_admin, user, user_admin, mock_email_service
+    session,
+    client,
+    token,
+    token_oficial,
+    user,
+    user_oficial,
+    mock_email_service,
 ):
     total_emails = 0
 
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -52,7 +58,7 @@ async def test_loan_flow_success(
 
     resp = client.patch(
         f'{ENDPOINT_URL}/{loan_id}/approve',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -75,12 +81,12 @@ async def test_loan_flow_success(
 
 @pytest.mark.asyncio
 async def test_loan_flow_cancel_by_user(
-    session, client, token, user, user_admin, mock_email_service
+    session, client, token, user, user_oficial, mock_email_service
 ):
     total_emails = 0
 
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -106,13 +112,19 @@ async def test_loan_flow_cancel_by_user(
 
 
 @pytest.mark.asyncio
-async def test_loan_flow_reject_by_admin(
-    session, client, token, token_admin, user, user_admin, mock_email_service
+async def test_loan_flow_reject_by_oficial(
+    session,
+    client,
+    token,
+    token_oficial,
+    user,
+    user_oficial,
+    mock_email_service,
 ):
     total_emails = 0
 
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -128,7 +140,7 @@ async def test_loan_flow_reject_by_admin(
 
     resp = client.patch(
         f'{ENDPOINT_URL}/{loan_id}/reject',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -160,10 +172,10 @@ async def test_request_loan_unavailable_book(
 
 @pytest.mark.asyncio
 async def test_list_loans_admin_success(
-    session, client, user, user_admin, token_admin
+    session, client, user, user_oficial, token_oficial
 ):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -175,7 +187,7 @@ async def test_list_loans_admin_success(
 
     response = client.get(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -185,9 +197,11 @@ async def test_list_loans_admin_success(
 
 
 @pytest.mark.asyncio
-async def test_list_my_loans_success(session, client, user, user_admin, token):
+async def test_list_my_loans_success(
+    session, client, user, user_oficial, token
+):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -215,9 +229,9 @@ def _dt(days):
     return datetime.now(timezone.utc) + timedelta(days=days)
 
 
-def test_check_overdue_updates_status(user_admin):
+def test_check_overdue_updates_status(user_oficial):
     loan = Loan(book_id=1)
-    loan.created_by_id = user_admin.id
+    loan.created_by_id = user_oficial.id
     loan.status = LoanStatus.BORROWED
     loan.borrowed_at = _dt(-10)
     loan.due_date = _dt(-2)
@@ -227,9 +241,9 @@ def test_check_overdue_updates_status(user_admin):
     assert loan.status == LoanStatus.LATE
 
 
-def test_check_overdue_ignores_not_due(user_admin):
+def test_check_overdue_ignores_not_due(user_oficial):
     loan = Loan(book_id=1)
-    loan.created_by_id = user_admin.id
+    loan.created_by_id = user_oficial.id
     loan.status = LoanStatus.BORROWED
     loan.borrowed_at = _dt(-2)
     loan.due_date = _dt(+5)
@@ -239,7 +253,7 @@ def test_check_overdue_ignores_not_due(user_admin):
     assert loan.status == LoanStatus.BORROWED
 
 
-def test_check_overdue_ignores_non_borrowed(user_admin):
+def test_check_overdue_ignores_non_borrowed(user_oficial):
     for invalid in [
         LoanStatus.REQUESTED,
         LoanStatus.REJECTED,
@@ -248,7 +262,7 @@ def test_check_overdue_ignores_non_borrowed(user_admin):
         LoanStatus.LATE,
     ]:
         loan = Loan(book_id=1, status=invalid)
-        loan.created_by_id = user_admin.id
+        loan.created_by_id = user_oficial.id
 
         loan.check_overdue()
 
@@ -257,9 +271,9 @@ def test_check_overdue_ignores_non_borrowed(user_admin):
 
 
 @pytest.mark.asyncio
-async def test_user_cannot_approve(session, client, token, user_admin):
+async def test_user_cannot_approve(session, client, token, user_oficial):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -280,9 +294,9 @@ async def test_user_cannot_approve(session, client, token, user_admin):
 
 
 @pytest.mark.asyncio
-async def test_user_cannot_reject(session, client, token, user_admin):
+async def test_user_cannot_reject(session, client, token, user_oficial):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -314,7 +328,7 @@ def test_user_cannot_list_all(session, client, token):
 
 @pytest.mark.asyncio
 async def test_list_loans_filter_by_status(
-    session, client, token_admin, user, user_admin
+    session, client, token_oficial, user, user_oficial
 ):
     # Cria livro
     book = Book(
@@ -325,7 +339,7 @@ async def test_list_loans_filter_by_status(
         edition=1,
         year=2024,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -342,7 +356,7 @@ async def test_list_loans_filter_by_status(
 
     resp = client.get(
         f'{ENDPOINT_URL}?status=borrowed',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -353,10 +367,10 @@ async def test_list_loans_filter_by_status(
 
 
 @pytest.mark.asyncio
-async def test_list_loans_invalid_status_returns_400(client, token_admin):
+async def test_list_loans_invalid_status_returns_400(client, token_oficial):
     resp = client.get(
         f'{ENDPOINT_URL}?status=INVALID_STATUS',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.BAD_REQUEST
@@ -365,7 +379,7 @@ async def test_list_loans_invalid_status_returns_400(client, token_admin):
 
 @pytest.mark.asyncio
 async def test_list_loans_search_filters_results(
-    session, client, token_admin, user, user_admin
+    session, client, token_oficial, user, user_oficial
 ):
     book1 = Book(
         isbn='123-ABC',
@@ -388,7 +402,7 @@ async def test_list_loans_search_filters_results(
         quantity=1,
         available_quantity=0,
     )
-    book1.created_by_id = book2.created_by_id = user_admin.id
+    book1.created_by_id = book2.created_by_id = user_oficial.id
 
     session.add_all([book1, book2])
     await session.commit()
@@ -403,7 +417,7 @@ async def test_list_loans_search_filters_results(
 
     resp = client.get(
         f'{ENDPOINT_URL}?search=Python',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -415,7 +429,7 @@ async def test_list_loans_search_filters_results(
 
 @pytest.mark.asyncio
 async def test_list_loans_search_matches_user_name(
-    session, client, token_admin, user, user_admin
+    session, client, token_oficial, user, user_oficial
 ):
     book = Book(
         isbn='333',
@@ -427,7 +441,7 @@ async def test_list_loans_search_matches_user_name(
         quantity=1,
         available_quantity=0,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -441,7 +455,7 @@ async def test_list_loans_search_matches_user_name(
 
     resp = client.get(
         f'{ENDPOINT_URL}?search={search_piece}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -452,10 +466,12 @@ async def test_list_loans_search_matches_user_name(
 
 
 @pytest.mark.asyncio
-async def test_list_loans_invalid_sort_field_returns_422(client, token_admin):
+async def test_list_loans_invalid_sort_field_returns_422(
+    client, token_oficial
+):
     resp = client.get(
         f'{ENDPOINT_URL}?sort_by=invalid_field',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -465,10 +481,10 @@ async def test_list_loans_invalid_sort_field_returns_422(client, token_admin):
 
 
 @pytest.mark.asyncio
-async def test_list_loans_sort_by_due_date(client, token_admin):
+async def test_list_loans_sort_by_due_date(client, token_oficial):
     resp = client.get(
         f'{ENDPOINT_URL}?sort_by=due_date&sort_order=asc',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert resp.status_code == HTTPStatus.OK
@@ -489,7 +505,7 @@ async def test_return_loan_not_found(client, token):
 
 @pytest.mark.asyncio
 async def test_return_loan_forbidden_for_other_user(
-    session, client, user, token, other_user, user_admin
+    session, client, user, token, other_user, user_oficial
 ):
     book = Book(
         isbn='222',
@@ -499,7 +515,7 @@ async def test_return_loan_forbidden_for_other_user(
         edition=1,
         year=2020,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -521,7 +537,7 @@ async def test_return_loan_forbidden_for_other_user(
 
 @pytest.mark.asyncio
 async def test_return_loan_mark_as_returned_raises_400(
-    session, client, user, user_admin, token
+    session, client, user, user_oficial, token
 ):
     book = Book(
         isbn='333',
@@ -533,7 +549,7 @@ async def test_return_loan_mark_as_returned_raises_400(
         quantity=1,
         available_quantity=0,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -558,7 +574,7 @@ async def test_return_loan_mark_as_returned_raises_400(
 
 @pytest.mark.asyncio
 async def test_list_loans_pagination(
-    session, client, token_admin, user, user_admin
+    session, client, token_oficial, user, user_oficial
 ):
     LIMIT = 2
     books = []
@@ -573,7 +589,7 @@ async def test_list_loans_pagination(
             quantity=1,
             available_quantity=0,
         )
-        b.created_by_id = user_admin.id
+        b.created_by_id = user_oficial.id
         books.append(b)
     session.add_all(books)
     await session.commit()
@@ -592,7 +608,7 @@ async def test_list_loans_pagination(
 
     resp = client.get(
         f'{ENDPOINT_URL}?limit={LIMIT}&offset=0',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert resp.status_code == HTTPStatus.OK
     data = resp.json()
@@ -602,7 +618,7 @@ async def test_list_loans_pagination(
 
     resp2 = client.get(
         f'{ENDPOINT_URL}?limit=2&offset={LIMIT}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert resp2.status_code == HTTPStatus.OK
     data2 = resp2.json()

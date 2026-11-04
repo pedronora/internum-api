@@ -110,8 +110,8 @@ async def vacation_coord(session) -> User:
 
 
 @pytest_asyncio.fixture
-async def vacation_admin(session) -> User:
-    return await persist_user(session, build_user(role=Role.ADMIN))
+async def vacation_oficial(session) -> User:
+    return await persist_user(session, build_user(role=Role.OFICIAL))
 
 
 def auth_headers(client, user: User) -> dict:
@@ -210,11 +210,11 @@ def test_my_accrual_periods(client, vacation_user):
 
 @freeze_time(FROZEN_NOW)
 def test_admin_view_user_accrual_periods(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     response = client.get(
         f'{ENDPOINT_URL}/accrual-periods/{vacation_user.id}',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     assert len(response.json()) == TOTAL_ACCRUAL_PERIODS
@@ -232,10 +232,10 @@ def test_view_other_user_periods_forbidden(
 
 
 @freeze_time(FROZEN_NOW)
-def test_user_accrual_periods_not_found(client, vacation_admin):
+def test_user_accrual_periods_not_found(client, vacation_oficial):
     response = client.get(
         f'{ENDPOINT_URL}/accrual-periods/999999',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -534,14 +534,14 @@ def test_get_other_user_request_forbidden(
 
 
 @freeze_time(FROZEN_NOW)
-def test_list_requests(client, vacation_user, vacation_admin):
+def test_list_requests(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
 
     response = client.get(
         ENDPOINT_URL + '/requests',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     items = response.json()
@@ -554,13 +554,13 @@ def test_list_requests(client, vacation_user, vacation_admin):
 
 @freeze_time(FROZEN_NOW)
 def test_list_requests_filtered_by_status(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     create_request(client, headers, [MAIN_PERIOD], period['id'])
 
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     response = client.get(
         ENDPOINT_URL + '/requests?status=submitted',
         headers=admin_headers,
@@ -593,36 +593,36 @@ def test_approve_requires_admin_or_coord(
 
 
 @freeze_time(FROZEN_NOW)
-def test_reject_request(client, vacation_user, vacation_admin):
+def test_reject_request(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
 
     response = client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/reject',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={'reviewer_notes': 'Sem saldo'},
     )
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert data['status'] == 'rejected'
-    assert data['reviewer_id'] == vacation_admin.id
+    assert data['reviewer_id'] == vacation_oficial.id
 
 
 @freeze_time(FROZEN_NOW)
-def test_reject_after_approve(client, vacation_user, vacation_admin):
+def test_reject_after_approve(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
 
     client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/approve',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={},
     )
     response = client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/reject',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={},
     )
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -734,11 +734,11 @@ def test_approve_insufficient_balance(client, vacation_user, vacation_coord):
 
 
 @freeze_time(FROZEN_NOW)
-def test_confirm_fruition(client, vacation_user, vacation_admin):
+def test_confirm_fruition(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
-    coord_headers = auth_headers(client, vacation_admin)
+    coord_headers = auth_headers(client, vacation_oficial)
     client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/approve',
         headers=coord_headers,
@@ -764,11 +764,11 @@ def test_confirm_fruition(client, vacation_user, vacation_admin):
 
 
 @freeze_time(FROZEN_NOW)
-def test_confirm_fruition_denied(client, vacation_user, vacation_admin):
+def test_confirm_fruition_denied(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/approve',
         headers=admin_headers,
@@ -850,10 +850,10 @@ def test_get_grant_forbidden_for_other_user(
 
 
 @freeze_time(FROZEN_NOW)
-def test_create_retroactive_grant(client, vacation_old_user, vacation_admin):
+def test_create_retroactive_grant(client, vacation_old_user, vacation_oficial):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
 
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
@@ -909,14 +909,14 @@ def test_create_grant_requires_admin_or_coord(
 
 @freeze_time(FROZEN_NOW)
 def test_create_grant_on_non_expired_period(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/grants',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={
             'start_date': '2025-06-12',
             'end_date': '2025-06-21',
@@ -929,14 +929,14 @@ def test_create_grant_on_non_expired_period(
 
 @freeze_time(FROZEN_NOW)
 def test_create_normal_grant_on_concessive_period(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/grants',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={
             'start_date': MAIN_PERIOD['start_date'],
             'end_date': MAIN_PERIOD['end_date'],
@@ -950,7 +950,7 @@ def test_create_normal_grant_on_concessive_period(
     assert data['status'] == 'granted'
     assert data['days_count'] == MAIN_CAL_DAYS
     assert data['is_regularization'] is False
-    assert data['approved_by_id'] == vacation_admin.id
+    assert data['approved_by_id'] == vacation_oficial.id
     assert data['confirmed_by_id'] is None
 
     updated = get_accrual_periods(client, headers)
@@ -961,14 +961,14 @@ def test_create_normal_grant_on_concessive_period(
 
 @freeze_time(FROZEN_NOW)
 def test_create_normal_grant_requires_concessive_period(
-    client, vacation_old_user, vacation_admin
+    client, vacation_old_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_old_user.id}/{period["id"]}/grants',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={
             'start_date': '2025-06-12',
             'end_date': '2025-06-21',
@@ -981,14 +981,14 @@ def test_create_normal_grant_requires_concessive_period(
 
 @freeze_time(FROZEN_NOW)
 def test_create_normal_grant_clt_validation(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/grants',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={
             'start_date': WEEKEND_START_PERIOD['start_date'],
             'end_date': WEEKEND_START_PERIOD['end_date'],
@@ -1001,14 +1001,14 @@ def test_create_normal_grant_clt_validation(
 
 @freeze_time(FROZEN_NOW)
 def test_create_normal_grant_can_confirm_fruition(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/grants',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={
             'start_date': MAIN_PERIOD['start_date'],
             'end_date': MAIN_PERIOD['end_date'],
@@ -1020,7 +1020,7 @@ def test_create_normal_grant_can_confirm_fruition(
 
     response = client.post(
         f'{ENDPOINT_URL}/grants/{grant["id"]}/confirm-fruition',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={'confirm': True},
     )
     assert response.status_code == HTTPStatus.OK
@@ -1033,10 +1033,10 @@ def test_create_normal_grant_can_confirm_fruition(
 
 
 @freeze_time(FROZEN_NOW)
-def test_double_payment_flow(client, vacation_old_user, vacation_admin):
+def test_double_payment_flow(client, vacation_old_user, vacation_oficial):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
 
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
@@ -1062,11 +1062,11 @@ def test_double_payment_flow(client, vacation_old_user, vacation_admin):
 
 @freeze_time(FROZEN_NOW)
 def test_retroactive_full_balance_closes_period(
-    client, vacation_old_user, vacation_admin
+    client, vacation_old_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
 
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
@@ -1092,11 +1092,11 @@ def test_retroactive_full_balance_closes_period(
 
 @freeze_time(FROZEN_NOW)
 def test_confirm_fruition_rejected_for_terminal_grant(
-    client, vacation_old_user, vacation_admin
+    client, vacation_old_user, vacation_oficial
 ):
     headers = auth_headers(client, vacation_old_user)
     period = get_period_by_status(client, headers, 'expired')
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
 
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
@@ -1121,14 +1121,14 @@ def test_confirm_fruition_rejected_for_terminal_grant(
 
 
 @freeze_time(FROZEN_NOW)
-def test_sell_days_by_admin(client, vacation_user, vacation_admin):
+def test_sell_days_by_admin(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
 
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/sell',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={'days': SELL_DAYS},
     )
     assert response.status_code == HTTPStatus.OK
@@ -1152,24 +1152,26 @@ def test_sell_days_forbidden_for_user(client, vacation_user, vacation_other):
 
 
 @freeze_time(FROZEN_NOW)
-def test_sell_days_above_limit(client, vacation_user, vacation_admin):
+def test_sell_days_above_limit(client, vacation_user, vacation_oficial):
     period = get_period_by_status(
         client, auth_headers(client, vacation_user), 'concessive'
     )
     response = client.post(
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/sell',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={'days': 11},
     )
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 @freeze_time(FROZEN_NOW)
-def test_sell_days_insufficient_balance(client, vacation_user, vacation_admin):
+def test_sell_days_insufficient_balance(
+    client, vacation_user, vacation_oficial
+):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'acquisitive')
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     sell_url = (
         f'{ENDPOINT_URL}/accrual-periods/'
         f'{vacation_user.id}/{period["id"]}/sell'
@@ -1196,14 +1198,14 @@ def test_alerts_requires_admin_or_coord(client, vacation_old_user):
 
 
 @freeze_time(FROZEN_NOW)
-def test_expired_alerts(client, vacation_old_user, vacation_admin):
+def test_expired_alerts(client, vacation_old_user, vacation_oficial):
     client.get(
         ENDPOINT_URL + '/accrual-periods',
         headers=auth_headers(client, vacation_old_user),
     )
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1217,7 +1219,7 @@ def test_expired_alerts(client, vacation_old_user, vacation_admin):
 
 @freeze_time(FROZEN_NOW)
 def test_pending_alert_for_open_concessive_without_schedule(
-    client, vacation_user, vacation_admin
+    client, vacation_user, vacation_oficial
 ):
     client.get(
         ENDPOINT_URL + '/accrual-periods',
@@ -1225,7 +1227,7 @@ def test_pending_alert_for_open_concessive_without_schedule(
     )
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1239,14 +1241,14 @@ def test_pending_alert_for_open_concessive_without_schedule(
 
 
 @freeze_time(FROZEN_NOW)
-def test_about_to_expire_alert(client, about_to_expire_user, vacation_admin):
+def test_about_to_expire_alert(client, about_to_expire_user, vacation_oficial):
     client.get(
         ENDPOINT_URL + '/accrual-periods',
         headers=auth_headers(client, about_to_expire_user),
     )
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1261,12 +1263,12 @@ def test_about_to_expire_alert(client, about_to_expire_user, vacation_admin):
 
 @freeze_time(FROZEN_NOW)
 def test_alert_appears_for_user_without_prior_interaction(
-    client, vacation_old_user, vacation_admin
+    client, vacation_old_user, vacation_oficial
 ):
     """Usuário que nunca acessou o módulo deve aparecer nos alertas."""
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1280,14 +1282,16 @@ def test_alert_appears_for_user_without_prior_interaction(
 
 
 @freeze_time(FROZEN_NOW)
-def test_no_alert_when_request_pending(client, vacation_user, vacation_admin):
+def test_no_alert_when_request_pending(
+    client, vacation_user, vacation_oficial
+):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     create_request(client, headers, [MAIN_PERIOD], period['id'])
 
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1298,21 +1302,21 @@ def test_no_alert_when_request_pending(client, vacation_user, vacation_admin):
 
 
 @freeze_time(FROZEN_NOW)
-def test_no_alert_when_grant_active(client, vacation_user, vacation_admin):
+def test_no_alert_when_grant_active(client, vacation_user, vacation_oficial):
     headers = auth_headers(client, vacation_user)
     period = get_period_by_status(client, headers, 'concessive')
     request_id = create_request(client, headers, [MAIN_PERIOD], period['id'])
 
     response = client.post(
         f'{ENDPOINT_URL}/requests/{request_id}/approve',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
         json={},
     )
     assert response.status_code == HTTPStatus.OK
 
     response = client.get(
         ENDPOINT_URL + '/alerts',
-        headers=auth_headers(client, vacation_admin),
+        headers=auth_headers(client, vacation_oficial),
     )
     assert response.status_code == HTTPStatus.OK
     alerts = response.json()
@@ -1327,7 +1331,7 @@ def test_no_alert_when_grant_active(client, vacation_user, vacation_admin):
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_grants_by_unit(client, session, vacation_admin):
+async def test_list_grants_by_unit(client, session, vacation_oficial):
     registro_user = await persist_user(
         session,
         build_user(unidade=Unidade.REGISTRO, subunidade='Análise'),
@@ -1337,7 +1341,7 @@ async def test_list_grants_by_unit(client, session, vacation_admin):
         build_user(unidade=Unidade.GESTAO, subunidade='Atendimento'),
     )
 
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     grant_ids = {}
     for user in (registro_user, gestao_user):
         headers = auth_headers(client, user)
@@ -1372,7 +1376,7 @@ async def test_list_grants_by_unit(client, session, vacation_admin):
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
 async def test_list_grants_by_unit_and_subunidade(
-    client, session, vacation_admin
+    client, session, vacation_oficial
 ):
     subunidade = 'Atendimento'
     gestao_user = await persist_user(
@@ -1384,7 +1388,7 @@ async def test_list_grants_by_unit_and_subunidade(
         build_user(unidade=Unidade.GESTAO, subunidade='TI'),
     )
 
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     target_ids = {}
     for user in (gestao_user, other_gestao_user):
         headers = auth_headers(client, user)
@@ -1412,7 +1416,7 @@ async def test_list_grants_by_unit_and_subunidade(
 
 @pytest.mark.asyncio
 @freeze_time(FROZEN_NOW)
-async def test_list_requests_by_unit(client, session, vacation_admin):
+async def test_list_requests_by_unit(client, session, vacation_oficial):
     registro_user = await persist_user(
         session,
         build_user(unidade=Unidade.REGISTRO, subunidade='Análise'),
@@ -1422,7 +1426,7 @@ async def test_list_requests_by_unit(client, session, vacation_admin):
         build_user(unidade=Unidade.GESTAO, subunidade='Atendimento'),
     )
 
-    admin_headers = auth_headers(client, vacation_admin)
+    admin_headers = auth_headers(client, vacation_oficial)
     expected_ids = {}
     for user in (registro_user, gestao_user):
         headers = auth_headers(client, user)
