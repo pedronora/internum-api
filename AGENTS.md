@@ -134,7 +134,9 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **Endpoints**: `/token`, `/refresh_token`, `/logout`, `/forgot-password`, `/reset-password`
 - **Services**: `services.py` concentra emissão, rotação e revogação de refresh (`issue_refresh_token`, `rotate_refresh_token`, `delete_refresh_token`, `delete_user_tokens` com `keep_jti` opcional, `refresh_token_jti`)
 - **Modelos**: `RefreshToken` (`jti`, `user_id`, `expires_at`, `session_started_at`, `rotated_at`, `created_at`) e `PasswordResetToken`
-- **Password reset**: Token with `purpose='password_reset'`, stored in `PasswordResetToken` model
+- **Password reset**: Token with `purpose='password_reset'`; o banco guarda apenas `sha256(token)` em `PasswordResetToken.token_hash` (nunca o token cru)
+- **Rate limiting**: `/token`, `/refresh_token`, `/forgot-password` e `/reset-password` usam `slowapi` (`core/rate_limiting.py`), com limites por IP em `RATE_LIMIT_*` e resposta 429 com `Retry-After`. O `X-Real-IP` do nginx é a chave; a porta da API não deve ser publicada
+- **Headers de segurança**: `SecurityHeadersMiddleware` adiciona CSP restritiva, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP e HSTS quando `SECURE_COOKIE=True`; `/docs` fica fora da CSP
 - **Jobs**: `delete_expired_reset_tokens` e `delete_expired_refresh_tokens` (APScheduler, diário)
 - **Email**: `EmailService` (Mailtrap) with HTML templates
 
@@ -252,7 +254,9 @@ poetry run alembic upgrade head
 | `internum/api/main.py` | API v1 router aggregator |
 | `internum/core/settings.py` | Pydantic Settings (env config) |
 | `internum/core/database.py` | Async engine + session factory |
-| `internum/core/security.py` | JWT, passwords, get_current_user |
+| `internum/core/security.py` | JWT, passwords, get_current_user, `hash_token` |
+| `internum/core/rate_limiting.py` | Limiter (slowapi) e identificação do cliente |
+| `internum/core/security_headers.py` | Headers de segurança e CSP da API |
 | `internum/modules/auth/services.py` | Emissão, rotação e revogação de refresh tokens |
 | `internum/modules/auth/jobs.py` | Poda diária de reset tokens e refresh tokens expirados |
 | `internum/core/permissions.py` | Permission dependencies |
