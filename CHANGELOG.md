@@ -5,6 +5,64 @@ Todas as mudanças relevantes desta imagem serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o versionamento segue o padrão [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [2.0.0] - 2026-11-04
+
+### Removed
+
+- **Breaking:** o perfil `admin` foi eliminado. A organização tem **um único
+  `oficial`**, criado exclusivamente por `seed_oficial.py` e protegido por um
+  índice único parcial (`uq_user_roles_single_oficial`). Vínculos `ADMIN`
+  existentes são descartados pela migration `7f3c9d2a1b45`.
+- **Breaking:** `roles` deixou de ser obrigatório na criação de usuário.
+  Coordenação, gestão e demais perfis criam usuários **sem perfil**, que
+  recebem acesso depois.
+- **Breaking:** trocar a senha de terceiros agora exige
+  `users:change_password`, exclusivo do `oficial`.
+
+### Added
+
+- Autorização por permissões (`core/authorization.py` + `core/permissions.py`),
+  com perfis por unidade, múltiplos papéis por usuário, edição por campo e
+  matriz documentada em `docs/authorization.md`.
+- Rotação e revogação de refresh tokens no servidor, com detecção de reuso,
+  `session_started_at` e poda diária dos tokens expirados.
+- Limite absoluto de sessão de 7 dias (`REFRESH_TOKEN_ABSOLUTE_DAYS`).
+- Invalidação de access tokens após troca/reset de senha via
+  `password_changed_at`, mantendo a sessão atual na autoalteração.
+- Política de senha compartilhada no reset e na troca (8–64 caracteres, com
+  maiúscula, minúscula, dígito e caractere especial).
+- Seed `seed_oficial.py` idempotente, executado no boot do container e no
+  compose de desenvolvimento.
+- Guard que impede editar/desativar a conta do `oficial` por qualquer outro
+  usuário, e proteção do último `oficial` ativo.
+- Testes dedicados para unicidade do oficial, troca de senha e seed.
+
+### Changed
+
+- `/docs`, `/redoc` e `/openapi.json` só existem com `DOCS_ENABLED=True`.
+- `GET /api/v1/status` não expõe mais detalhes internos em caso de falha.
+- A troca de senha do próprio usuário devolve um novo `access_token`; quando o
+  `oficial` troca a senha de outra pessoa, retorna `access_token: null` e
+  revoga todas as sessões do alvo.
+
+### Fixed
+
+- Tokens de refresh e de reset não autenticam mais como access tokens
+  (`type`/`purpose` são validados em `get_current_user`).
+- Rotas de férias por unidade respeitam a permissão `vacation:manage_all` em
+  vez de checar o perfil.
+
+### Security
+
+- Rate limit por IP em `/token`, `/refresh_token`, `/forgot-password` e
+  `/reset-password` (`slowapi`), configurável por `RATE_LIMIT_*`, com resposta
+  429 e `Retry-After`.
+- `password_reset_tokens` guarda apenas `sha256(token)`; a migration
+  `c4e1a9b7d2f6` converte os tokens existentes.
+- Headers de segurança em todas as respostas da API: CSP restritiva,
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, COOP/CORP e HSTS quando `SECURE_COOKIE=True`.
+
 ## [1.3.0] - 2026-09-12
 
 ### Added
