@@ -69,11 +69,11 @@ require_permission(permission)       # dependency factory: 403 when user lacks p
 require_self_or_permission(permission)  # self OR permission (per-user endpoints)
 ```
 - **Usage**: `current_user: Annotated[UserRead, Depends(require_permission(Permission.X))]`
-- **Roles**: `admin`, `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` (from `users/enums.py`)
+- **Roles**: `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` (from `users/enums.py`)
 - **Permissions**: catálogo em `core/authorization.py` (`Permission`), derivado dos perfis por `permissions_for_roles`
 - **Matriz completa**: `docs/authorization.md`
 - **Nunca** use checagem por `role == ...` em endpoints: use permissões
-- `admin`, `oficial` e `suboficial` têm break-glass (todas as permissões)
+- `oficial` tem break-glass (todas as permissões); `suboficial` tem todas, exceto `users:change_password`
 
 ### 7. Database Session
 - **Engine**: `create_async_engine(Settings().DATABASE_URL, connect_args={'options': '-c timezone=UTC'})`
@@ -87,8 +87,8 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **Validação do access**: `get_current_user` exige `type='access'`, rejeita token com `purpose` (token de reset não vira sessão) e exige `iat` posterior a `users.password_changed_at` (tolerância de 1s por causa da precisão em segundos do `iat`)
 - **Rotação**: `/refresh_token` consome o token atual (`SELECT ... FOR UPDATE`) e emite um novo; reuso de token com `rotated_at` preenchido apaga todas as sessões do usuário. Cada linha guarda `session_started_at`, herdado nas rotações; passados `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 7) do início da sessão, o refresh é rejeitado mesmo que o token ainda não tenha expirado
 - **Poda**: job diário `delete_expired_refresh_tokens` apaga linhas com `expires_at` vencido ou com a sessão acima do limite absoluto
-- **Revogação**: `/logout` apaga a linha do refresh apresentado; `/reset-password` marca `password_changed_at` e apaga todas as linhas do usuário; `/{id}/change-password` mantém o refresh da sessão atual e apaga as demais (admin trocando a senha de outro usuário apaga todas as sessões do alvo)
-- **Troca de senha**: quando o próprio usuário troca, a resposta devolve um `access_token` novo, porque todos os access tokens emitidos antes da troca são rejeitados pelo `iat`; quando um admin troca a senha de outra pessoa, `access_token` vem `null` (a sessão do admin não muda)
+- **Revogação**: `/logout` apaga a linha do refresh apresentado; `/reset-password` marca `password_changed_at` e apaga todas as linhas do usuário; `/{id}/change-password` mantém o refresh da sessão atual e apaga as demais (oficial trocando a senha de outro usuário apaga todas as sessões do alvo)
+- **Troca de senha**: quando o próprio usuário troca, a resposta devolve um `access_token` novo, porque todos os access tokens emitidos antes da troca são rejeitados pelo `iat`; quando o oficial troca a senha de outra pessoa, a senha antiga não é exigida e `access_token` vem `null` (a sessão do oficial não muda)
 - **Cookie settings**: `secure`, `httponly`, `samesite`, `max_age` e `expires` (datetime) from Settings
 - **Token payload**: `sub` (username), `exp`, `iat`, `type` ('access'/'refresh'), optional `purpose`
 - **Purpose/type validation**: `decode_token(token, expected_purpose='password_reset', expected_type='refresh')`
@@ -122,12 +122,12 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 
 ### Users (`internum/modules/users/`)
 - **Model**: `User` com `hiring_date` (período aquisitivo base) e `UserRole` (N:N)
-- **Perfis**: `admin`, `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` — uma pessoa pode ter vários
+- **Perfis**: `oficial`, `suboficial`, `coord_registro`, `coord_gestao`, `gestor_pessoas`, `colaborador_registro`, `colaborador_gestao` — uma pessoa pode ter vários; o `oficial` é único e criado pelo seed
 - **Unidades**: `Unidade.DIRECAO`, `Unidade.REGISTRO`, `Unidade.GESTAO`; `subunidade` é texto livre/opcional (`SUBUNIDADES_SUGERIDAS` só orienta o cadastro e nunca concede permissão)
 - **Aprovação**: por permissão (`vacation:manage_all`), não por setor; ver `docs/authorization.md`
 - **Schemas**: `UserRead` (sensível), `UserPublic` (diretório sem CPF/salário) e `UserSelf` (`roles` + `permissions`)
-- **Edição por campo**: `_apply_field_updates` valida a permissão de cada campo; ninguém edita os próprios perfis; último admin ativo é protegido
-- **Troca de senha**: `POST /{id}/change-password` grava `password_changed_at`, revoga os refresh de outras sessões (preserva o `jti` do cookie atual quando é o próprio usuário) e devolve um `access_token` novo apenas na troca do próprio usuário
+- **Edição por campo**: `_apply_field_updates` valida a permissão de cada campo; ninguém edita os próprios perfis; a conta do oficial só pode ser alterada pelo próprio oficial e o último oficial ativo é protegido
+- **Trocas de senha**: `POST /{id}/change-password` grava `password_changed_at`, revoga os refresh de outras sessões (preserva o `jti` do cookie atual quando é o próprio usuário) e devolve um `access_token` novo apenas na troca do próprio usuário; o oficial troca a senha de terceiros sem `old_password` (`users:change_password`), os demais perfis não
 - **Revogação de access**: `password_changed_at` (coluna nullable em `users`) é a referência para invalidar tokens emitidos antes da troca/reset; backfill na migration marca todos os usuários existentes
 
 ### Auth (`internum/modules/auth/`)
@@ -142,7 +142,7 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **CLT Rules**: Art. 129, 130, 134, 137, 143
 - **Validations**: No weekends/holidays (holidays.Brazil(state='PR')), min 5 days, max 3 periods, days not exceeding available (30/yr), saldo restante ≥14 dias a menos que já exista gozo ≥14 dias
 - **Model**: `VacationAccrualPeriod` per user com `days_earned`, `days_reserved`, `days_enjoyed`, `days_sold`, `days_double_paid`; status `ACQUISITIVE → CONCESSIVE → EXPIRED/CLOSED`; períodos criados automaticamente a partir de `hiring_date`
-- **Grants**: `VacationGrant` (NORMAL/RETROACTIVE/DOUBLE_PAYMENT) com status `GRANTED → FRUITED/PAID_DOUBLE/CANCELLED`; aprovação gera grants + reserva; RH confirma fruição (`confirm-fruition`); grants retroativo/dobro do admin são terminais (já nascem `FRUITED`/`PAID_DOUBLE`, somam em `days_enjoyed`/`days_double_paid`, sem reserva/confirmação)
+- **Grants**: `VacationGrant` (NORMAL/RETROACTIVE/DOUBLE_PAYMENT) com status `GRANTED → FRUITED/PAID_DOUBLE/CANCELLED`; aprovação gera grants + reserva; RH confirma fruição (`confirm-fruition`); grants retroativo/dobro do RH são terminais (já nascem `FRUITED`/`PAID_DOUBLE`, somam em `days_enjoyed`/`days_double_paid`, sem reserva/confirmação)
 - **Workflow**: Requests nascem em `SUBMITTED` → `APPROVED/REJECTED/CANCELLED`; aprovação gera concessões e reserva dias
 - **Por unidade**: `GET /grants/by-unit/{unidade}` e `GET /requests/by-unit/{unidade}` (`vacation:manage_all`, opcional `?subunidade=`; `subunidade` é texto livre)
 - **Migration**: `a911d5bbe8d1` criou `vacation_accrual_periods` + `vacation_grants` e removeu `vacation_balances`/`vacation_historical_periods`
@@ -166,7 +166,7 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 ## Testing Patterns
 
 ### Conftest (`tests/conftest.py`)
-- **Fixtures**: `session`, `client`, `user`, `admin_user`, `coord_user`, `auth_headers`
+- **Fixtures**: `session`, `client`, `user`, `user_oficial`, `user_suboficial`, `user_coord`, `user_no_role`, `token_oficial` e tokens derivados
 - **Factories**: `UserFactory`, `BookFactory`, etc. (factory-boy)
 - **Database**: Testcontainers PostgreSQL (function-scoped)
 

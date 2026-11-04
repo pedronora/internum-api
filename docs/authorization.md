@@ -34,8 +34,7 @@ ser alteradas sem migration. A unidade `gestao` **não** exige subunidade.
 
 | Perfil                 | Descrição                                      |
 | ---------------------- | ---------------------------------------------- |
-| `admin`                | Administração técnica com break-glass          |
-| `oficial`              | Oficial — decisão                              |
+| `oficial`              | Oficial — conta única, criada pelo seed        |
 | `suboficial`           | Suboficial — decisão                           |
 | `coord_registro`       | Coordenação do Registro                        |
 | `coord_gestao`         | Coordenação da Gestão                          |
@@ -43,22 +42,27 @@ ser alteradas sem migration. A unidade `gestao` **não** exige subunidade.
 | `colaborador_registro` | Colaborador do Registro                        |
 | `colaborador_gestao`   | Colaborador da Gestão                          |
 
+O perfil `admin` foi eliminado. A organização tem **um único `oficial`**, e a
+conta é criada exclusivamente por `internum/scripts/seed_oficial.py`. A API
+nunca atribui o perfil `oficial`; um índice único parcial no banco
+(`uq_user_roles_single_oficial`) garante a unicidade.
+
 ### 3.1 Hierarquia de atribuição
 
-| Ator             | Pode atribuir/remover                                        |
-| ---------------- | ------------------------------------------------------------ |
-| `admin`          | Qualquer perfil                                              |
-| `oficial`        | Qualquer perfil, exceto `admin`                              |
-| `suboficial`     | Qualquer perfil, exceto `admin`                              |
-| `gestor_pessoas` | `colaborador_registro`, `colaborador_gestao`                 |
-| `coord_gestao`   | `colaborador_gestao`                                         |
-| `coord_registro` | `colaborador_registro`                                       |
-| Demais           | Nenhum                                                       |
+| Ator         | Pode atribuir/remover                                        |
+| ------------ | ------------------------------------------------------------ |
+| `oficial`    | Todos os perfis, exceto `oficial`                            |
+| `suboficial` | Todos os perfis, exceto `oficial` e `suboficial`             |
+| Demais       | Nenhum                                                       |
 
 Regras adicionais:
 
 - Ninguém altera os próprios perfis.
-- O último `admin` ativo não pode ser removido/desativado.
+- O último `oficial` ativo não pode ser removido/desativado.
+- A conta do `oficial` só pode ser editada ou desativada pelo próprio
+  oficial. Suboficial, coordenação e gestão recebem 403.
+- Coordenação, gestão de pessoas e colaboradores criam usuários **sem
+  perfil**; o seletor de perfis só aparece para oficial e suboficial.
 - Alterar perfis exige `users:assign_roles` **e** que todos os perfis
   adicionados/removidos estejam na hierarquia do ator.
 
@@ -73,6 +77,7 @@ Regras adicionais:
 | `users:edit_employment`    | Editar unidade, subunidade, admissão, rescisão e status ativo      |
 | `users:edit_salary`        | Editar salário bruto                                               |
 | `users:assign_roles`       | Atribuir/remover perfis (respeitando a hierarquia)                 |
+| `users:change_password`    | Trocar a senha de qualquer usuário (exclusivo do oficial)          |
 | `legal_briefs:manage`      | Criar/editar/cancelar ementas                                      |
 | `notices:manage`           | Criar/gerir avisos                                                 |
 | `library:manage`           | Gerir livros e empréstimos                                         |
@@ -82,25 +87,26 @@ Regras adicionais:
 
 ## 5. Matriz perfil × permissão
 
-| Permissão                   | admin | oficial | suboficial | coord_registro | coord_gestao | gestor_pessoas | colab_registro | colab_gestao |
-| --------------------------- | :---: | :-----: | :--------: | :------------: | :----------: | :------------: | :------------: | :----------: |
-| `users:create`              |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `users:read`                |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       ✔        |      ✔       |
-| `users:read_sensitive`      |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `users:edit_profile`        |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `users:edit_employment`     |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `users:edit_salary`         |  ✔   |    ✔    |     ✔      |       —        |      —       |       ✔        |       —        |      —       |
-| `users:assign_roles`        |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `legal_briefs:manage`       |  ✔   |    ✔    |     ✔      |       ✔        |      —       |       —        |       —        |      —       |
-| `notices:manage`            |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `library:manage`            |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `vacation:read_all`         |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `vacation:manage_all`       |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
-| `vacation:confirm_fruition` |  ✔   |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| Permissão                   | oficial | suboficial | coord_registro | coord_gestao | gestor_pessoas | colab_registro | colab_gestao |
+| --------------------------- | :-----: | :--------: | :------------: | :----------: | :------------: | :------------: | :----------: |
+| `users:create`              |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `users:read`                |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       ✔        |      ✔       |
+| `users:read_sensitive`      |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `users:edit_profile`        |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `users:edit_employment`     |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `users:edit_salary`         |    ✔    |     ✔      |       —        |      —       |       ✔        |       —        |      —       |
+| `users:assign_roles`        |    ✔    |     ✔      |       —        |      —       |       —        |       —        |      —       |
+| `users:change_password`     |    ✔    |     —      |       —        |      —       |       —        |       —        |      —       |
+| `legal_briefs:manage`       |    ✔    |     ✔      |       ✔        |      —       |       —        |       —        |      —       |
+| `notices:manage`            |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `library:manage`            |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `vacation:read_all`         |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `vacation:manage_all`       |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
+| `vacation:confirm_fruition` |    ✔    |     ✔      |       ✔        |      ✔       |       ✔        |       —        |      —       |
 
-`admin`, `oficial` e `suboficial` recebem **todas** as permissões
-(break-glass). `gestor_pessoas` é a coordenação acrescida de
-`users:edit_salary`.
+`oficial` recebe **todas** as permissões. `suboficial` recebe todas, exceto
+`users:change_password`: ele não pode assumir a conta de outro usuário.
+`gestor_pessoas` é a coordenação acrescida de `users:edit_salary`.
 
 ## 6. Edição de usuário (campo a campo)
 
@@ -117,6 +123,11 @@ Exceção: o próprio usuário pode editar `name`, `username`, `email`,
 `birthday` e `phone` via `PUT /users/{id}`, mas **nunca** os próprios perfis.
 O frontend (Meu Perfil) envia somente esses campos.
 
+A conta do `oficial` é protegida por um guard adicional: qualquer outro
+usuário recebe 403 ao tentar editar ou desativar o oficial
+(`PUT`/`DELETE /users/{id}`). Isso impede que um suboficial troque o e-mail do
+oficial e use a recuperação de senha para assumir a conta.
+
 ## 7. Endpoints relevantes
 
 | Endpoint                                  | Permissão                          | Retorno                          |
@@ -128,12 +139,18 @@ O frontend (Meu Perfil) envia somente esses campos.
 | `POST /api/v1/users/`                     | `users:create`                     | `UserRead`                       |
 | `PUT /api/v1/users/{id}`                  | por campo (tabela acima)           | `UserRead`                       |
 | `DELETE /api/v1/users/{id}`               | `users:edit_employment`            | 204                              |
+| `POST /api/v1/users/{id}/change-password` | self ou `users:change_password`    | 200 (sessões do alvo revogadas)  |
 | `GET /api/v1/vacation/grants/by-unit/{u}` | `vacation:manage_all`              | concessões da unidade            |
 | `GET /api/v1/vacation/requests/by-unit/{u}` | `vacation:manage_all`            | solicitações da unidade          |
 
 Os endpoints `by-unit` aceitam `?subunidade=` opcional. As rotas de escrita de
 férias usam `vacation:manage_all`; a confirmação de fruição usa
 `vacation:confirm_fruition`.
+
+Na troca de senha, a autoalteração exige `old_password`. O `oficial` pode
+trocar a senha de qualquer usuário sem informar a senha antiga; a resposta
+traz `access_token: null` e todas as sessões do alvo são revogadas. Nenhum
+outro perfil troca a senha de terceiros.
 
 ## 8. Frontend
 
