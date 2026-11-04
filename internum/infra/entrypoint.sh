@@ -18,5 +18,10 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
   alembic upgrade head
 fi
 
+if [ "${RUN_SEED_OFICIAL:-true}" = "true" ]; then
+  echo "Garantindo a conta do oficial..."
+  python internum/scripts/seed_oficial.py
+fi
+
 echo "Iniciando API..."
 exec uvicorn internum.app:app --host 0.0.0.0 --port "${PORT:-8000}"

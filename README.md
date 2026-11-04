@@ -107,7 +107,7 @@ Construída com **FastAPI**, **SQLAlchemy**, **PostgreSQL** e **Alembic**, a apl
 │   │       ├── schemas.py
 │   │       └── services.py
 │   ├── scripts
-│   │   └── seed_admin.py
+│   │   └── seed_oficial.py
 │   └── utils
 │       ├── datetime.py
 │       └── sanitize.py
