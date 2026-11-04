@@ -12,6 +12,7 @@ class Permission(str, Enum):
     USERS_EDIT_EMPLOYMENT = 'users:edit_employment'
     USERS_EDIT_SALARY = 'users:edit_salary'
     USERS_ASSIGN_ROLES = 'users:assign_roles'
+    USERS_CHANGE_PASSWORD = 'users:change_password'
     LEGAL_BRIEFS_MANAGE = 'legal_briefs:manage'
     NOTICES_MANAGE = 'notices:manage'
     LIBRARY_MANAGE = 'library:manage'
@@ -30,7 +31,6 @@ _COORDENACAO_PERMISSIONS = frozenset({
     Permission.USERS_READ_SENSITIVE,
     Permission.USERS_EDIT_PROFILE,
     Permission.USERS_EDIT_EMPLOYMENT,
-    Permission.USERS_ASSIGN_ROLES,
     Permission.NOTICES_MANAGE,
     Permission.LIBRARY_MANAGE,
     Permission.VACATION_READ_ALL,
@@ -39,9 +39,8 @@ _COORDENACAO_PERMISSIONS = frozenset({
 })
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.ADMIN: ALL_PERMISSIONS,
     Role.OFICIAL: ALL_PERMISSIONS,
-    Role.SUBOFICIAL: ALL_PERMISSIONS,
+    Role.SUBOFICIAL: ALL_PERMISSIONS - {Permission.USERS_CHANGE_PASSWORD},
     Role.COORD_REGISTRO: _COORDENACAO_PERMISSIONS
     | {Permission.LEGAL_BRIEFS_MANAGE},
     Role.COORD_GESTAO: _COORDENACAO_PERMISSIONS,
@@ -51,16 +50,11 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.COLABORADOR_GESTAO: _COLLABORATOR_PERMISSIONS,
 }
 
+# O oficial é único e criado apenas pelo seed, portanto o perfil `OFICIAL`
+# nunca é atribuível pela API. O suboficial não pode criar pares.
 _ASSIGNABLE_ROLES: dict[Role, frozenset[Role]] = {
-    Role.ADMIN: frozenset(Role),
-    Role.OFICIAL: frozenset(Role) - {Role.ADMIN},
-    Role.SUBOFICIAL: frozenset(Role) - {Role.ADMIN},
-    Role.GESTOR_PESSOAS: frozenset({
-        Role.COLABORADOR_REGISTRO,
-        Role.COLABORADOR_GESTAO,
-    }),
-    Role.COORD_GESTAO: frozenset({Role.COLABORADOR_GESTAO}),
-    Role.COORD_REGISTRO: frozenset({Role.COLABORADOR_REGISTRO}),
+    Role.OFICIAL: frozenset(Role) - {Role.OFICIAL},
+    Role.SUBOFICIAL: frozenset(Role) - {Role.OFICIAL, Role.SUBOFICIAL},
 }
 
 
@@ -73,10 +67,6 @@ def permissions_for_roles(roles: Iterable[Role]) -> frozenset[Permission]:
 
 def has_permission(roles: Iterable[Role], permission: Permission) -> bool:
     return permission in permissions_for_roles(roles)
-
-
-def is_admin(roles: Iterable[Role]) -> bool:
-    return Role.ADMIN in roles
 
 
 def assignable_roles(actor_roles: Iterable[Role]) -> frozenset[Role]:

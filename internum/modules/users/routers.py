@@ -13,7 +13,6 @@ from internum.core.authorization import (
     Permission,
     can_assign_role,
     has_permission,
-    is_admin,
     permissions_for_roles,
 )
 from internum.core.database import get_session
@@ -128,26 +127,42 @@ def _ensure_can_assign_roles(
             )
 
 
-async def _ensure_not_last_active_admin(
+def _ensure_can_target_official(actor: UserRead, db_user: User) -> None:
+    """Somente o próprio oficial pode alterar a conta do oficial.
+
+    Sem isso, um suboficial poderia trocar o e-mail do oficial e usar o
+    fluxo de recuperação de senha para assumir a conta.
+    """
+    if db_user.id != actor.id and Role.OFICIAL in db_user.roles:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail=(
+                'Acesso negado: a conta do oficial só pode ser alterada '
+                'pelo próprio oficial.'
+            ),
+        )
+
+
+async def _ensure_not_last_active_official(
     session: Session, db_user: User
 ) -> None:
-    admins = (
+    officials = (
         await session.scalar(
             select(func.count())
             .select_from(User)
             .join(UserRole, UserRole.user_id == User.id)
             .where(
                 User.active,
-                UserRole.role == Role.ADMIN,
+                UserRole.role == Role.OFICIAL,
                 User.id != db_user.id,
             )
         )
         or 0
     )
-    if admins == 0:
+    if officials == 0:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail='Não é possível remover o último administrador ativo.',
+            detail='Não é possível remover o último oficial ativo.',
         )
 
 
@@ -196,8 +211,8 @@ async def _apply_role_updates(
     current = set(db_user.roles)
     _ensure_can_assign_roles(actor, requested ^ current)
 
-    if Role.ADMIN in current - requested and db_user.active:
-        await _ensure_not_last_active_admin(session, db_user)
+    if Role.OFICIAL in current - requested and db_user.active:
+        await _ensure_not_last_active_official(session, db_user)
 
     for assignment in list(db_user.role_assignments):
         if assignment.role not in requested:
@@ -219,7 +234,8 @@ async def create_user(
     user: UserCreate,
     current_user: CanCreateUser,
 ):
-    _ensure_can_assign_roles(current_user, set(user.roles))
+    if user.roles:
+        _ensure_can_assign_roles(current_user, set(user.roles))
 
     if user.gross_salary is not None and not has_permission(
         current_user.roles, Permission.USERS_EDIT_SALARY
@@ -368,6 +384,8 @@ async def update_user(
     db_user = await _load_active_user(session, user_id)
     is_self = db_user.id == current_user.id
 
+    _ensure_can_target_official(current_user, db_user)
+
     if not is_self and not has_permission(
         current_user.roles, Permission.USERS_EDIT_PROFILE
     ):
@@ -387,8 +405,8 @@ async def update_user(
         )
 
     if update_data.get('active') is False:
-        if Role.ADMIN in db_user.roles:
-            await _ensure_not_last_active_admin(session, db_user)
+        if Role.OFICIAL in db_user.roles:
+            await _ensure_not_last_active_official(session, db_user)
 
     try:
         await session.commit()
@@ -424,14 +442,13 @@ async def deactivate_user(
             detail='Não é possível desativar o próprio usuário.',
         )
 
+    _ensure_can_target_official(current_user, db_user)
+
     if not db_user.active:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=f'Usuário com id ({user_id}) já está inativo.',
         )
-
-    if Role.ADMIN in db_user.roles:
-        await _ensure_not_last_active_admin(session, db_user)
 
     db_user.active = False
     await session.commit()
@@ -449,9 +466,6 @@ async def change_password(
     session: Session,
     current_user: CurrentUser,
 ):
-    if current_user.id != user_id and not is_admin(current_user.roles):
-        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
-
     db_user = await session.scalar(select(User).where(User.id == user_id))
 
     if not db_user:
@@ -460,11 +474,25 @@ async def change_password(
             detail=f'Não encontrado usuário com id ({user_id}).',
         )
 
-    if not verify_password(passwords.old_password, db_user.password):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='Senha antiga incorreta.',
-        )
+    is_self = current_user.id == db_user.id
+
+    if not is_self and not has_permission(
+        current_user.roles, Permission.USERS_CHANGE_PASSWORD
+    ):
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=DENIED)
+
+    if is_self:
+        if not passwords.old_password:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail='Senha antiga obrigatória.',
+            )
+
+        if not verify_password(passwords.old_password, db_user.password):
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail='Senha antiga incorreta.',
+            )
 
     if verify_password(passwords.new_password, db_user.password):
         raise HTTPException(
@@ -472,7 +500,6 @@ async def change_password(
             detail='Senha nova igual à atual.',
         )
 
-    is_self = current_user.id == db_user.id
     keep_jti = (
         refresh_token_jti(request.cookies.get(settings.REFRESH_COOKIE_NAME))
         if is_self

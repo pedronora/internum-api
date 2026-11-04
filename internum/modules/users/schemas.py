@@ -114,7 +114,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    roles: list[Role] = Field(min_length=1)
+    roles: list[Role] = Field(default_factory=list)
 
     _validate_password = validator('password', allow_reuse=True)(
         validate_password_complexity
@@ -122,7 +122,7 @@ class UserCreate(UserBase):
 
 
 class UserChangePassword(BaseModel):
-    old_password: str
+    old_password: Optional[str] = None
     new_password: str
     _validate_password = validator('new_password', allow_reuse=True)(
         validate_password_complexity
@@ -189,7 +189,7 @@ class UserUpdate(UserBase):
     phone: Optional[str] = None
     gross_salary: Optional[Decimal] = Field(None, ge=0)
     termination_date: Optional[date] = None
-    roles: Optional[list[Role]] = Field(None, min_length=1)
+    roles: Optional[list[Role]] = None
 
     @model_validator(mode='after')
     def validate_active_termination_date(self):
