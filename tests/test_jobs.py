@@ -137,7 +137,7 @@ async def test_delete_expired_refresh_tokens_empty(session):
 
 @pytest.mark.asyncio
 async def test_check_overdue_loans_marks_overdue(
-    session, mock_email_service, user, user_admin
+    session, mock_email_service, user, user_oficial
 ):
     book = Book(
         isbn='123',
@@ -149,7 +149,7 @@ async def test_check_overdue_loans_marks_overdue(
         quantity=1,
         available_quantity=0,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -179,7 +179,7 @@ async def test_check_overdue_loans_marks_overdue(
 
 @pytest.mark.asyncio
 async def test_check_overdue_loans_ignores_not_due(
-    session, mock_email_service, user, user_admin
+    session, mock_email_service, user, user_oficial
 ):
     book = Book(
         isbn='12345',
@@ -191,7 +191,7 @@ async def test_check_overdue_loans_ignores_not_due(
         quantity=1,
         available_quantity=0,
     )
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)

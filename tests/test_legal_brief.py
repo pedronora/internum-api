@@ -16,7 +16,7 @@ class LegalBriefFactory(factory.Factory):
     content = factory.Faker('text')
 
 
-def test_create_legal_brief(client, user_admin, token_admin):
+def test_create_legal_brief(client, user_oficial, token_oficial):
     new_legal_brief = {
         'title': 'Ementa teste',
         'content': 'Conteúdo da ementa teste',
@@ -24,14 +24,14 @@ def test_create_legal_brief(client, user_admin, token_admin):
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_legal_brief,
     )
 
     assert response.status_code == HTTPStatus.CREATED
     assert response.json()['title'] == new_legal_brief['title'].upper()
     assert response.json()['content'] == new_legal_brief['content']
-    assert response.json()['created_by']['name'] == user_admin.name
+    assert response.json()['created_by']['name'] == user_oficial.name
 
 
 def test_create_legal_brief_without_permission(client, user, token):
@@ -49,7 +49,9 @@ def test_create_legal_brief_without_permission(client, user, token):
     assert response.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_create_legal_brief_sanitizes_content(client, user_admin, token_admin):
+def test_create_legal_brief_sanitizes_content(
+    client, user_oficial, token_oficial
+):
     new_legal_brief = {
         'title': 'Ementa com HTML',
         'content': (
@@ -61,7 +63,7 @@ def test_create_legal_brief_sanitizes_content(client, user_admin, token_admin):
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_legal_brief,
     )
 
@@ -75,16 +77,16 @@ def test_create_legal_brief_sanitizes_content(client, user_admin, token_admin):
 
 @pytest.mark.asyncio
 async def test_update_legal_brief_sanitizes_content(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(title='Original', content='Conteúdo inicial')
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={
             'title': 'Atualizado',
             'content': '<p>Novo <script>alert(1)</script></p>',
@@ -98,7 +100,7 @@ async def test_update_legal_brief_sanitizes_content(
     assert 'onerror' not in content
 
 
-def test_create_legal_brief_value_missing(client, user_admin, token_admin):
+def test_create_legal_brief_value_missing(client, user_oficial, token_oficial):
     new_legal_brief = {
         'title': '',
         'content': 'Conteúdo da ementa teste',
@@ -106,7 +108,7 @@ def test_create_legal_brief_value_missing(client, user_admin, token_admin):
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_legal_brief,
     )
 
@@ -114,7 +116,7 @@ def test_create_legal_brief_value_missing(client, user_admin, token_admin):
 
 
 def test_create_legal_brief_data_missing_field(
-    client, user_admin, token_admin
+    client, user_oficial, token_oficial
 ):
     new_legal_brief = {
         'content': 'Conteúdo da ementa teste',
@@ -122,7 +124,7 @@ def test_create_legal_brief_data_missing_field(
 
     response = client.post(
         ENDPOINT_URL,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=new_legal_brief,
     )
 
@@ -134,12 +136,12 @@ def test_create_legal_brief_data_missing_field(
 
 
 @pytest.mark.asyncio
-async def test_list_legal_briefs(session, client, user, user_admin, token):
+async def test_list_legal_briefs(session, client, user, user_oficial, token):
     total = 5
 
     legal_briefs = LegalBriefFactory.create_batch(total)
     for lb in legal_briefs:
-        lb.created_by_id = user_admin.id
+        lb.created_by_id = user_oficial.id
     session.add_all(legal_briefs)
     await session.commit()
 
@@ -154,14 +156,14 @@ async def test_list_legal_briefs(session, client, user, user_admin, token):
 
 @pytest.mark.asyncio
 async def test_list_legal_briefs_with_search_param(
-    session, client, user, user_admin, token
+    session, client, user, user_oficial, token
 ):
     legal_briefs = LegalBriefFactory.create_batch(3)
     for lb in legal_briefs:
-        lb.created_by_id = user_admin.id
+        lb.created_by_id = user_oficial.id
 
     custom_legal_brief = LegalBriefFactory.create(title='Busca')
-    custom_legal_brief.created_by_id = user_admin.id
+    custom_legal_brief.created_by_id = user_oficial.id
     legal_briefs.append(custom_legal_brief)
 
     session.add_all(legal_briefs)
@@ -180,18 +182,18 @@ async def test_list_legal_briefs_with_search_param(
 async def test_get_legal_brief_by_id_success(
     client,
     session,
-    user_admin,
-    token_admin,
+    user_oficial,
+    token_oficial,
 ):
     legal_brief = LegalBriefFactory()
-    legal_brief.created_by_id = user_admin.id
+    legal_brief.created_by_id = user_oficial.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)
 
     response = client.get(
         ENDPOINT_URL + f'/{legal_brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -200,15 +202,15 @@ async def test_get_legal_brief_by_id_success(
     assert data['id'] == legal_brief.id
     assert data['title'] == legal_brief.title
     assert data['content'] == legal_brief.content
-    assert data['created_by']['id'] == user_admin.id
+    assert data['created_by']['id'] == user_oficial.id
     assert data['canceled'] is False
     assert data['revisions'] == [] or data['revisions'] is None
 
 
-def test_get_legal_brief_by_id_not_found(client, token_admin):
+def test_get_legal_brief_by_id_not_found(client, token_oficial):
     response = client.get(
         ENDPOINT_URL + '/99999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
@@ -217,20 +219,20 @@ def test_get_legal_brief_by_id_not_found(client, token_admin):
 
 @pytest.mark.asyncio
 async def test_update_legal_brief_creates_revision(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(
         title='Original',
         content='Conteúdo inicial',
     )
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={'title': 'Novo título', 'content': 'Novo conteúdo'},
     )
 
@@ -247,20 +249,20 @@ async def test_update_legal_brief_creates_revision(
 
 @pytest.mark.asyncio
 async def test_update_legal_brief_formatting_only_no_new_revision(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(
         title='Original',
         content='<p>Conteúdo inicial</p>',
     )
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={
             'title': 'Original',
             'content': '<p><strong>Conteúdo inicial</strong></p>',
@@ -276,20 +278,20 @@ async def test_update_legal_brief_formatting_only_no_new_revision(
 
 @pytest.mark.asyncio
 async def test_update_legal_brief_title_change_creates_revision(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(
         title='Original',
         content='<p>Conteúdo inicial</p>',
     )
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={
             'title': 'Novo título',
             'content': '<p><strong>Conteúdo inicial</strong></p>',
@@ -303,10 +305,10 @@ async def test_update_legal_brief_title_change_creates_revision(
     assert data['revisions'][0]['content'] == '<p>Conteúdo inicial</p>'
 
 
-def test_update_legal_brief_not_found(session, client, token_admin):
+def test_update_legal_brief_not_found(session, client, token_oficial):
     response = client.put(
         ENDPOINT_URL + '/9999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={'title': 'Novo título', 'content': 'Novo content'},
     )
 
@@ -316,10 +318,10 @@ def test_update_legal_brief_not_found(session, client, token_admin):
 
 @pytest.mark.asyncio
 async def test_update_legal_brief_rollback_on_error(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(title='Teste rollback', content='Conteúdo')
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
@@ -328,7 +330,7 @@ async def test_update_legal_brief_rollback_on_error(
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json=bad_data,
     )
 
@@ -336,7 +338,7 @@ async def test_update_legal_brief_rollback_on_error(
 
     response = client.get(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     revisions = response.json()['revisions']
@@ -345,22 +347,22 @@ async def test_update_legal_brief_rollback_on_error(
 
 @pytest.mark.asyncio
 async def test_update_canceled_brief_rejected(
-    session, client, user_admin, token_admin
+    session, client, user_oficial, token_oficial
 ):
     brief = LegalBrief(
         title='Cancelado',
         content='Antigo',
         canceled=True,
-        canceled_by_id=user_admin.id,
+        canceled_by_id=user_oficial.id,
     )
-    brief.created_by_id = user_admin.id
+    brief.created_by_id = user_oficial.id
     session.add(brief)
     await session.commit()
     await session.refresh(brief)
 
     response = client.put(
         ENDPOINT_URL + f'/{brief.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={
             'title': 'Tentativa de atualização',
             'content': 'Tentativa de atualização',
@@ -376,46 +378,46 @@ async def test_update_canceled_brief_rejected(
 
 @pytest.mark.asyncio
 async def test_cancel_legal_brief_success(
-    client, session, user_admin, token_admin
+    client, session, user_oficial, token_oficial
 ):
     legal_brief = LegalBriefFactory()
-    legal_brief.created_by_id = user_admin.id
+    legal_brief.created_by_id = user_oficial.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)
 
     response = client.patch(
         ENDPOINT_URL + f'/{legal_brief.id}/cancel',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert data['canceled'] is True
-    assert data['canceled_by']['id'] == user_admin.id
+    assert data['canceled_by']['id'] == user_oficial.id
 
 
-def test_cancel_legal_brief_not_found(client, token_admin):
+def test_cancel_legal_brief_not_found(client, token_oficial):
     response = client.patch(
         ENDPOINT_URL + '/99999/cancel',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.asyncio
 async def test_cancel_legal_brief_already_canceled(
-    client, session, user_admin, token_admin
+    client, session, user_oficial, token_oficial
 ):
     legal_brief = LegalBriefFactory(canceled=True)
-    legal_brief.created_by_id = user_admin.id
+    legal_brief.created_by_id = user_oficial.id
     session.add(legal_brief)
     await session.commit()
     await session.refresh(legal_brief)
 
     response = client.patch(
         ENDPOINT_URL + f'/{legal_brief.id}/cancel',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST

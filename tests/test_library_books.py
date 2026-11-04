@@ -25,7 +25,9 @@ class BookFactory(factory.Factory):
 
 
 @pytest.mark.asyncio
-async def test_create_book_success(client, session, user_admin, token_admin):
+async def test_create_book_success(
+    client, session, user_oficial, token_oficial
+):
     payload = {
         'isbn': '1234567890',
         'title': 'Clean Architecture',
@@ -38,7 +40,7 @@ async def test_create_book_success(client, session, user_admin, token_admin):
     response = client.post(
         ENDPOINT_URL,
         json=payload,
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.CREATED
@@ -53,11 +55,11 @@ async def test_create_book_success(client, session, user_admin, token_admin):
         select(Book).where(Book.isbn == payload['isbn'])
     )
     assert result is not None
-    assert result.created_by_id == user_admin.id
+    assert result.created_by_id == user_oficial.id
 
 
 @pytest.mark.asyncio
-async def test_create_book_conflict(client, session, token_admin):
+async def test_create_book_conflict(client, session, token_oficial):
     client.post(
         ENDPOINT_URL,
         json={
@@ -68,7 +70,7 @@ async def test_create_book_conflict(client, session, token_admin):
             'edition': 2,
             'year': 2021,
         },
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     response = client.post(
@@ -81,7 +83,7 @@ async def test_create_book_conflict(client, session, token_admin):
             'edition': 2,
             'year': 2021,
         },
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.CONFLICT
@@ -108,13 +110,13 @@ async def test_create_book_unauthorized(client):
 async def test_list_books_default(
     client,
     session,
-    user_admin,
+    user_oficial,
     token,
 ):
     expected_books = 5
     books_list = BookFactory.create_batch(expected_books)
     for book in books_list:
-        book.created_by_id = user_admin.id
+        book.created_by_id = user_oficial.id
 
     session.add_all(books_list)
     await session.commit()
@@ -130,11 +132,11 @@ async def test_list_books_default(
 
 
 @pytest.mark.asyncio
-async def test_list_books_with_search(client, session, user_admin, token):
+async def test_list_books_with_search(client, session, user_oficial, token):
     book_a = BookFactory(title='Python Tricks')
-    book_a.created_by_id = user_admin.id
+    book_a.created_by_id = user_oficial.id
     book_b = BookFactory(title='JavaScript Guide')
-    book_b.created_by_id = user_admin.id
+    book_b.created_by_id = user_oficial.id
 
     session.add_all([book_a, book_b])
     await session.commit()
@@ -151,9 +153,9 @@ async def test_list_books_with_search(client, session, user_admin, token):
 
 
 @pytest.mark.asyncio
-async def test_get_book_success(client, session, user_admin, token):
+async def test_get_book_success(client, session, user_oficial, token):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
@@ -180,16 +182,18 @@ def test_get_book_not_found(client, token):
 
 
 @pytest.mark.asyncio
-async def test_update_book_success(session, client, user_admin, token_admin):
+async def test_update_book_success(
+    session, client, user_oficial, token_oficial
+):
     book = BookFactory(title='Old Title')
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
     response = client.put(
         ENDPOINT_URL + f'/{book.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
         json={'title': 'New Title'},
     )
 
@@ -198,39 +202,41 @@ async def test_update_book_success(session, client, user_admin, token_admin):
     assert data['title'] == 'New Title'
 
 
-def test_update_book_not_found(client, token_admin):
+def test_update_book_not_found(client, token_oficial):
     response = client.put(
         ENDPOINT_URL + '/9999',
         json={'title': 'Whatever'},
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_soft_delete_success(client, session, token_admin, user_admin):
+async def test_soft_delete_success(
+    client, session, token_oficial, user_oficial
+):
     book = BookFactory()
-    book.created_by_id = user_admin.id
+    book.created_by_id = user_oficial.id
     session.add(book)
     await session.commit()
     await session.refresh(book)
 
     response = client.delete(
         ENDPOINT_URL + f'/{book.id}',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
 
     assert response.status_code == HTTPStatus.NO_CONTENT
 
     refreshed = await session.scalar(select(Book).where(Book.id == book.id))
     assert refreshed.deleted_at is not None
-    assert refreshed.deleted_by_id == user_admin.id
+    assert refreshed.deleted_by_id == user_oficial.id
 
 
-def test_soft_delete_not_found(client, token_admin):
+def test_soft_delete_not_found(client, token_oficial):
     response = client.delete(
         ENDPOINT_URL + '/9999',
-        headers={'Authorization': f'Bearer {token_admin}'},
+        headers={'Authorization': f'Bearer {token_oficial}'},
     )
     assert response.status_code == HTTPStatus.NOT_FOUND

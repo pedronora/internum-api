@@ -161,18 +161,6 @@ def token_factory():
 
 
 @pytest.fixture
-def token_admin(client, user_admin):
-    response = client.post(
-        'api/v1/auth/token',
-        data={
-            'username': user_admin.username,
-            'password': user_admin.clean_password,
-        },
-    )
-    return response.json()['access_token']
-
-
-@pytest.fixture
 def token_coord(client, user_coord):
     response = client.post(
         'api/v1/auth/token',
@@ -203,6 +191,30 @@ def token_oficial(client, user_oficial):
         data={
             'username': user_oficial.username,
             'password': user_oficial.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
+@pytest.fixture
+def token_suboficial(client, user_suboficial):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_suboficial.username,
+            'password': user_suboficial.clean_password,
+        },
+    )
+    return response.json()['access_token']
+
+
+@pytest.fixture
+def token_no_role(client, user_no_role):
+    response = client.post(
+        'api/v1/auth/token',
+        data={
+            'username': user_no_role.username,
+            'password': user_no_role.clean_password,
         },
     )
     return response.json()['access_token']
@@ -253,8 +265,23 @@ async def user_inactive(session):
 
 
 @pytest_asyncio.fixture
-async def user_admin(session):
-    return await create_user_with_role(session, Role.ADMIN)
+async def user_suboficial(session):
+    return await create_user_with_role(session, Role.SUBOFICIAL)
+
+
+@pytest_asyncio.fixture
+async def user_no_role(session):
+    user = UserFactory()
+    plain_password = user.password
+
+    user.password = get_password_hash(plain_password)
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    user.clean_password = plain_password
+    return user
 
 
 @pytest_asyncio.fixture
