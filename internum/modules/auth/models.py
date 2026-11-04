@@ -13,7 +13,9 @@ class PasswordResetToken:
 
     id: Mapped[int] = mapped_column(init=False, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(Boolean, default=False)
 

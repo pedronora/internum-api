@@ -76,3 +76,28 @@ def test_token_de_reset_nao_autentica_como_access(client, user, token_factory):
     )
 
     assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_security_headers_are_present(client):
+    response = client.get(f'{ENDPOINT_URL}/status')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.headers['X-Content-Type-Options'] == 'nosniff'
+    assert response.headers['X-Frame-Options'] == 'DENY'
+    assert response.headers['Referrer-Policy'] == 'no-referrer'
+    assert response.headers['Cross-Origin-Opener-Policy'] == 'same-origin'
+    assert response.headers['Cross-Origin-Resource-Policy'] == 'same-site'
+    assert response.headers['Permissions-Policy'] == (
+        'camera=(), microphone=(), geolocation=()'
+    )
+    assert response.headers['Content-Security-Policy'] == (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; "
+        "form-action 'none'"
+    )
+
+
+def test_security_headers_skip_csp_on_docs(client):
+    response = client.get('/docs')
+
+    assert 'Content-Security-Policy' not in response.headers
+    assert response.headers['X-Content-Type-Options'] == 'nosniff'

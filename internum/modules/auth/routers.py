@@ -18,10 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from internum.core.database import get_session
 from internum.core.email import EmailService
+from internum.core.rate_limiting import limiter
 from internum.core.security import (
     create_access_token,
     decode_token,
     get_password_hash,
+    hash_token,
     verify_password,
 )
 from internum.core.settings import Settings
@@ -65,7 +67,9 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 
 @router.post('/token', response_model=Token)
+@limiter.limit(settings.RATE_LIMIT_LOGIN)
 async def login_for_access_token(
+    request: Request,
     response: Response,
     form_data: OAuth2Form,
     session: Session,
@@ -96,6 +100,7 @@ async def login_for_access_token(
 
 
 @router.post('/refresh_token', response_model=Token)
+@limiter.limit(settings.RATE_LIMIT_REFRESH)
 async def refresh_access_token(
     request: Request, response: Response, session: Session
 ):
@@ -141,7 +146,10 @@ async def logout(request: Request, response: Response, session: Session):
     status_code=HTTPStatus.OK,
     response_model=Message,
 )
+@limiter.limit(settings.RATE_LIMIT_FORGOT_PASSWORD)
 async def forgot_password(
+    request: Request,
+    response: Response,
     data: ForgotPasswordRequest,
     session: Session,
     background_tasks: BackgroundTasks,
@@ -162,7 +170,7 @@ async def forgot_password(
 
     db_reset_token = PasswordResetToken(
         user_id=user.id,
-        token=reset_token,
+        token_hash=hash_token(reset_token),
         expires_at=datetime.now(UTC)
         + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
     )
@@ -206,7 +214,13 @@ async def forgot_password(
 @router.post(
     '/reset-password', status_code=HTTPStatus.OK, response_model=Message
 )
-async def reset_password(data: ResetPasswordRequest, session: Session):
+@limiter.limit(settings.RATE_LIMIT_RESET_PASSWORD)
+async def reset_password(
+    request: Request,
+    response: Response,
+    data: ResetPasswordRequest,
+    session: Session,
+):
     try:
         payload = decode_token(
             data.token,
@@ -228,7 +242,7 @@ async def reset_password(data: ResetPasswordRequest, session: Session):
 
     db_token = await session.scalar(
         select(PasswordResetToken).where(
-            PasswordResetToken.token == data.token
+            PasswordResetToken.token_hash == hash_token(data.token)
         )
     )
 

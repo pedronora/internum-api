@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -68,6 +69,15 @@ def create_refresh_token(
 
 def get_password_hash(password: str):
     return pwd_context.hash(password)
+
+
+def hash_token(token: str) -> str:
+    """Deriva o valor persistido de um token sensível.
+
+    Tokens de reset de senha são credenciais temporárias: guardar apenas o
+    hash SHA-256 evita que um vazamento do banco permita redefinir senhas.
+    """
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str):
