@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     ADMIN_BIRTHDAY: str
     ADMIN_HIRING_DATE: str = ''
     MAILTRAP_TOKEN: str
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_LOGIN: str = '10/minute'
+    RATE_LIMIT_FORGOT_PASSWORD: str = '5/minute'
+    RATE_LIMIT_RESET_PASSWORD: str = '5/minute'
+    RATE_LIMIT_REFRESH: str = '60/minute'
 
     def __init__(self, **values):
         super().__init__(**values)

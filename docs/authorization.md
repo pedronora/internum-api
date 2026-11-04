@@ -162,3 +162,16 @@ outro perfil troca a senha de terceiros.
   `unidadeLabel`, `assignableRoles`).
 - O diretório de colegas (`/colaboradores`) usa `UsersService.directory()` e
   mostra apenas nome, username, unidade/subunidade, e-mail, telefone e perfis.
+
+## 9. Proteções de autenticação
+
+- **Rate limit**: `/token`, `/refresh_token`, `/forgot-password` e
+  `/reset-password` são limitados por IP (`slowapi`). Os valores ficam em
+  `RATE_LIMIT_LOGIN`, `RATE_LIMIT_REFRESH`, `RATE_LIMIT_FORGOT_PASSWORD` e
+  `RATE_LIMIT_RESET_PASSWORD`. Ao exceder, a API responde `429` com
+  `Retry-After`.
+- **Hash do reset**: `password_reset_tokens` guarda somente
+  `sha256(token)`; o token cru só existe no link enviado por e-mail.
+- **Headers**: toda resposta da API traz CSP restritiva,
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, COOP/CORP e, quando `SECURE_COOKIE=True`, HSTS.

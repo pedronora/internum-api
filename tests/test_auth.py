@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 
@@ -5,10 +6,14 @@ import pytest
 from freezegun import freeze_time
 from sqlalchemy import select
 
+from internum.core.rate_limiting import limiter
+from internum.core.security import hash_token
 from internum.core.settings import Settings
 from internum.modules.auth.models import PasswordResetToken, RefreshToken
 
 settings = Settings()
+
+SHA256_HEX_LENGTH = 64
 
 ENDPOINT_URL = '/api/v1/auth'
 
@@ -162,12 +167,64 @@ def test_forgot_password_sends_email_for_valid_user(
 
 
 @pytest.mark.asyncio
+async def test_forgot_password_stores_only_the_token_hash(
+    mock_email_service, client, session, user
+):
+    response = client.post(
+        f'{ENDPOINT_URL}/forgot-password',
+        json={'email': user.email},
+    )
+    assert response.status_code == HTTPStatus.OK
+
+    html = mock_email_service.call_args.kwargs['html']
+    raw_token = re.search(r'token=([A-Za-z0-9._-]+)', html).group(1)
+
+    db_token = await session.scalar(
+        select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    )
+
+    assert db_token is not None
+    assert db_token.token_hash == hash_token(raw_token)
+    assert db_token.token_hash != raw_token
+    assert len(db_token.token_hash) == SHA256_HEX_LENGTH
+
+
+def test_rate_limit_forgot_password(client):
+    limiter.reset()
+    limiter.enabled = True
+    try:
+        amount = int(settings.RATE_LIMIT_FORGOT_PASSWORD.split('/')[0])
+        responses = [
+            client.post(
+                f'{ENDPOINT_URL}/forgot-password',
+                json={'email': f'limite{i}@dominio.com'},
+            )
+            for i in range(amount + 1)
+        ]
+    finally:
+        limiter.enabled = False
+        limiter.reset()
+
+    assert all(
+        response.status_code == HTTPStatus.OK
+        for response in responses[:amount]
+    )
+
+    blocked = responses[-1]
+    assert blocked.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert blocked.json() == {
+        'detail': 'Muitas tentativas. Tente novamente em instantes.'
+    }
+    assert 'Retry-After' in blocked.headers
+
+
+@pytest.mark.asyncio
 async def test_reset_password_success(client, session, user, token_factory):
     token_reset = token_factory(user.id, purpose='password_reset')
 
     db_reset_token = PasswordResetToken(
         user_id=user.id,
-        token=token_reset,
+        token_hash=hash_token(token_reset),
         expires_at=datetime.now(UTC)
         + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
         used=False,
@@ -228,7 +285,7 @@ async def test_reset_password_wrong_purpose(
 
     db_reset_token = PasswordResetToken(
         user_id=user.id,
-        token=token,
+        token_hash=hash_token(token),
         expires_at=datetime.now(UTC)
         + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
         used=False,
@@ -257,7 +314,7 @@ async def test_reset_password_expired_token(
 
         db_reset_token = PasswordResetToken(
             user_id=user.id,
-            token=token,
+            token_hash=hash_token(token),
             expires_at=datetime.now(UTC)
             + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
             used=False,
@@ -284,7 +341,7 @@ async def test_reset_password_same_as_old(
 
     db_reset_token = PasswordResetToken(
         user_id=user.id,
-        token=token,
+        token_hash=hash_token(token),
         expires_at=datetime.now(UTC)
         + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
         used=False,
@@ -315,7 +372,7 @@ async def test_reset_password_user_not_found(
 
     db_reset_token = PasswordResetToken(
         user_id=user.id,
-        token=token,
+        token_hash=hash_token(token),
         expires_at=datetime.now(UTC)
         + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
         used=False,
@@ -432,7 +489,7 @@ async def test_reset_password_revoga_refresh_tokens(
     session.add(
         PasswordResetToken(
             user_id=user.id,
-            token=token_reset,
+            token_hash=hash_token(token_reset),
             expires_at=datetime.now(UTC)
             + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
             used=False,
@@ -475,7 +532,7 @@ async def test_reset_password_invalida_access_token_anterior(
         session.add(
             PasswordResetToken(
                 user_id=user.id,
-                token=token_reset,
+                token_hash=hash_token(token_reset),
                 expires_at=datetime.now(UTC)
                 + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES),
                 used=False,

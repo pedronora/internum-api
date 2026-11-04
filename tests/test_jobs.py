@@ -18,21 +18,21 @@ async def test_delete_expired_tokens(session, user):
 
     expired_token = PasswordResetToken(
         user_id=user.id,
-        token='expired_token',
+        token_hash='expired_token',
         expires_at=datetime.now(UTC) - timedelta(days=1),
         used=False,
     )
 
     used_token = PasswordResetToken(
         user_id=user.id,
-        token='used_token',
+        token_hash='used_token',
         expires_at=datetime.now(UTC) + timedelta(days=1),
         used=True,
     )
 
     valid_token = PasswordResetToken(
         user_id=user.id,
-        token='valid_token',
+        token_hash='valid_token',
         expires_at=datetime.now(UTC) + timedelta(days=1),
         used=False,
     )
@@ -46,7 +46,7 @@ async def test_delete_expired_tokens(session, user):
     remaining_tokens_list = remaining_tokens.all()
 
     assert len(remaining_tokens_list) == expected_remain_tokens
-    assert remaining_tokens_list[0].token in {'valid_token', 'used_token'}
+    assert remaining_tokens_list[0].token_hash in {'valid_token', 'used_token'}
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def test_delete_expired_tokens_no_tokens_to_delete(session):
 async def test_delete_expired_tokens_only_expired(session, user):
     expired_token = PasswordResetToken(
         user_id=user.id,
-        token='expired_only',
+        token_hash='expired_only',
         expires_at=datetime.now(UTC) - timedelta(hours=1),
         used=False,
     )
@@ -79,7 +79,7 @@ async def test_delete_expired_tokens_only_expired(session, user):
 async def test_delete_expired_tokens_only_used(session, user):
     used_token = PasswordResetToken(
         user_id=user.id,
-        token='used_only',
+        token_hash='used_only',
         expires_at=datetime.now(UTC) + timedelta(days=1),
         used=True,
     )
