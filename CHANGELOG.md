@@ -5,6 +5,19 @@ Todas as mudanças relevantes desta imagem serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e o versionamento segue o padrão [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [2.0.1] - 2026-11-05
+
+### Fixed
+
+- **Boot da imagem:** o seed do oficial passou a rodar como módulo
+  (`python -m internum.scripts.seed_oficial`). Na imagem, instalada com
+  `poetry install --only main --no-root`, executar o arquivo por caminho
+  colocava apenas `internum/scripts` no `sys.path` e o container morria com
+  `ModuleNotFoundError: No module named 'internum'` antes de subir o uvicorn —
+  o que deixava a API `unhealthy` e impedia o web de iniciar.
+- Teste de regressão para o comando do entrypoint e smoke test no CI que roda
+  o seed dentro da imagem construída em cada PR.
+
 ## [2.0.0] - 2026-11-04
 
 ### Removed

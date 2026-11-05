@@ -57,8 +57,48 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test seed module
+        if: github.event_name == 'pull_request'
+        run: |
+          cat > /tmp/smoke.env <<'EOF'
+          SECRET_KEY=smoke
+          ALGORITHM=HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES=30
+          FRONTEND_URL=http://localhost
+          POSTGRES_HOST=127.0.0.1
+          POSTGRES_PORT=1
+          POSTGRES_USER=smoke
+          POSTGRES_DB=smoke
+          POSTGRES_PASSWORD=smoke
+          REFRESH_COOKIE_NAME=refresh_token
+          REFRESH_COOKIE_PATH=/
+          REFRESH_TOKEN_EXPIRE_DAYS=7
+          REFRESH_COOKIE_MAX_AGE=604800
+          RESET_TOKEN_EXPIRE_MINUTES=30
+          SECURE_COOKIE=false
+          REFRESH_COOKIE_SAMESITE=lax
+          ADMIN_NAME=Smoke
+          ADMIN_USERNAME=smoke
+          ADMIN_EMAIL=smoke@example.com
+          ADMIN_PASSWORD=smoke
+          ADMIN_BIRTHDAY=1990-01-01
+          MAILTRAP_TOKEN=smoke
+          EOF
+
+          image="$(echo "${{ steps.meta.outputs.tags }}" | head -n1)"
+          output="$(docker run --rm --env-file /tmp/smoke.env \
+            --entrypoint python "$image" \
+            -m internum.scripts.seed_oficial 2>&1 || true)"
+          echo "$output"
+
+          if printf '%s' "$output" | grep -q "No module named 'internum'"; then
+            echo "::error::O seed não resolveu o pacote internum na imagem"
+            exit 1
+          fi
