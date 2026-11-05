@@ -20,7 +20,7 @@ fi
 
 if [ "${RUN_SEED_OFICIAL:-true}" = "true" ]; then
   echo "Garantindo a conta do oficial..."
-  python internum/scripts/seed_oficial.py
+  python -m internum.scripts.seed_oficial
 fi
 
 echo "Iniciando API..."
