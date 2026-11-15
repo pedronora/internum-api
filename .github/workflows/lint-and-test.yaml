@@ -50,4 +50,5 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_BIRTHDAY: ${{ secrets.ADMIN_BIRTHDAY }}
-          MAILTRAP_TOKEN: ${{ secrets.MAILTRAP_TOKEN }}
+          HOSTINGER_MAIL_TOKEN: ${{ secrets.HOSTINGER_MAIL_TOKEN }}
+          HOSTINGER_MAILBOX_RESOURCE_ID: ${{ secrets.HOSTINGER_MAILBOX_RESOURCE_ID }}

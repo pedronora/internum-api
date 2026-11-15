@@ -202,7 +202,6 @@ async def forgot_password(
         email_to=[user.email],
         subject='[Internum] Recuperação de Senha',
         html=html_content,
-        category='Reset Password',
     )
 
     return {
