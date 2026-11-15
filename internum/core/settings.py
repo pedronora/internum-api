@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str
     ADMIN_BIRTHDAY: str
     ADMIN_HIRING_DATE: str = ''
-    MAILTRAP_TOKEN: str
+    HOSTINGER_MAIL_TOKEN: str
+    HOSTINGER_MAILBOX_RESOURCE_ID: str
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_LOGIN: str = '10/minute'
     RATE_LIMIT_FORGOT_PASSWORD: str = '5/minute'

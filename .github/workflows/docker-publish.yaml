@@ -89,7 +89,8 @@ jobs:
           ADMIN_EMAIL=smoke@example.com
           ADMIN_PASSWORD=smoke
           ADMIN_BIRTHDAY=1990-01-01
-          MAILTRAP_TOKEN=smoke
+          HOSTINGER_MAIL_TOKEN=smoke
+          HOSTINGER_MAILBOX_RESOURCE_ID=smoke
           EOF
 
           image="$(echo "${{ steps.meta.outputs.tags }}" | head -n1)"

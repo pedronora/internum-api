@@ -190,7 +190,8 @@ ADMIN_PASSWORD=''
 ADMIN_BIRTHDAY='YYYY-MM-DD'
 ADMIN_HIRING_DATE='YYYY-MM-DD'
 
-MAILTRAP_TOKEN='...'
+HOSTINGER_MAIL_TOKEN='...'
+HOSTINGER_MAILBOX_RESOURCE_ID='...'
 ```
 
 ---
@@ -244,7 +245,7 @@ No TrueNAS:
 
 1. Use a imagem `ghcr.io/pedronora/internum-api:1.2.0` (pull direto, sem `docker save/load`).
 2. Crie o app usando essa imagem.
-3. Configure as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `SECRET_KEY`, `MAILTRAP_TOKEN`) ou via `env_file`.
+3. Configure as variáveis de ambiente de produção no painel (ex.: `POSTGRES_*`, `SECRET_KEY`, `HOSTINGER_MAIL_TOKEN`, `HOSTINGER_MAILBOX_RESOURCE_ID`) ou via `env_file`.
 
 ## 🏷️ Criar uma release
 

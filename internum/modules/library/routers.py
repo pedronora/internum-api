@@ -289,7 +289,6 @@ async def request_loan(
         email_to=[current_user.email],
         subject='[Internum] Confirmação de Solicitação de Empréstimo',
         html=html_content,
-        category='Loan Request',
     )
 
     return new_loan
@@ -349,7 +348,6 @@ async def cancel_loan(
         email_to=[current_user.email],
         subject='[Internum] Confirmação de Cancelamento de Empréstimo',
         html=html_content,
-        category='Loan Cancel',
     )
 
     return loan_db
@@ -408,7 +406,6 @@ async def approve_and_start_loan(
         email_to=[loan_db.created_by.email],
         subject='[Internum] Confirmação de Aprovação de Empréstimo',
         html=html_content,
-        category='Loan Approve',
     )
 
     return loan_db
@@ -471,7 +468,6 @@ async def return_loan(
         email_to=[current_user.email],
         subject='[Internum] Confirmação de Devolução de Empréstimo',
         html=html_content,
-        category='Loan Return',
     )
 
     return loan_db
@@ -526,7 +522,6 @@ async def reject_loan(
         email_to=[current_user.email],
         subject='[Internum] Informação de Rejeição de Empréstimo',
         html=html_content,
-        category='Loan Reject',
     )
 
     return loan_db

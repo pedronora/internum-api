@@ -77,5 +77,4 @@ def send_alert_late_loan(loan: Loan):
         email_to=[loan.created_by.email],
         subject='[Internum] Aviso de Empréstimo Atrasado',
         html=html_content,
-        category='Loan Late',
     )

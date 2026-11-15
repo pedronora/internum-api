@@ -138,7 +138,7 @@ require_self_or_permission(permission)  # self OR permission (per-user endpoints
 - **Rate limiting**: `/token`, `/refresh_token`, `/forgot-password` e `/reset-password` usam `slowapi` (`core/rate_limiting.py`), com limites por IP em `RATE_LIMIT_*` e resposta 429 com `Retry-After`. O `X-Real-IP` do nginx é a chave; a porta da API não deve ser publicada
 - **Headers de segurança**: `SecurityHeadersMiddleware` adiciona CSP restritiva, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP e HSTS quando `SECURE_COOKIE=True`; `/docs` fica fora da CSP
 - **Jobs**: `delete_expired_reset_tokens` e `delete_expired_refresh_tokens` (APScheduler, diário)
-- **Email**: `EmailService` (Mailtrap) with HTML templates
+- **Email**: `EmailService` (Hostinger Mail API) with HTML templates
 
 ### Vacation (`internum/modules/vacation/`)
 - **CLT Rules**: Art. 129, 130, 134, 137, 143

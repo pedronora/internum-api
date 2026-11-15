@@ -317,7 +317,7 @@ version = "3.4.9"
 description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "dev"]
+groups = ["dev"]
 files = [
     {file = "charset_normalizer-3.4.9-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:cd6280cf040f233bd7d3407b743b4b4c74f70e8e1c4199cb112a62c941c0772a"},
     {file = "charset_normalizer-3.4.9-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:aa99adc8f081b475a12843953db36831eaf83ec33eb46a90629ca6a5de45a616"},
@@ -1077,6 +1077,24 @@ files = [
 python-dateutil = ">=2.9.0.post0,<3"
 
 [[package]]
+name = "hostinger-mail-api"
+version = "1.18.5"
+description = "Hostinger Mail API"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "hostinger_mail_api-1.18.5-py3-none-any.whl", hash = "sha256:58e97fe2f28a83d26f97ec5b31fc6d5d3d04168d398609674f09f70a89bb2bd8"},
+    {file = "hostinger_mail_api-1.18.5.tar.gz", hash = "sha256:b17cbe755c9411b718b827f40ab98e6f49e7221c4beee13f74f707f01a870e1f"},
+]
+
+[package.dependencies]
+pydantic = ">=2"
+python-dateutil = ">=2.8.2"
+typing-extensions = ">=4.7.1"
+urllib3 = ">=2.7.0,<3.0.0"
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 description = "A minimal low-level HTTP client."
@@ -1255,22 +1273,6 @@ mongodb = ["pymongo (>4.1,<5)"]
 redis = ["redis (>3,!=4.5.2,!=4.5.3,<8.0.0)"]
 rediscluster = ["redis (>=4.2.0,!=4.5.2,!=4.5.3)"]
 valkey = ["valkey (>=6)"]
-
-[[package]]
-name = "mailtrap"
-version = "2.6.1"
-description = "Official mailtrap.io API client"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "mailtrap-2.6.1-py3-none-any.whl", hash = "sha256:ab87f03d88b24882b162ede48d3a2a84bf39c45add34522ef1fdfabb4bc425e3"},
-    {file = "mailtrap-2.6.1.tar.gz", hash = "sha256:8b97fe66717dcd8ec4484edd528716c8bbd0954d6b2a91860c2aed7df4ded626"},
-]
-
-[package.dependencies]
-pydantic = ">=2.11.7"
-requests = ">=2.26.0"
 
 [[package]]
 name = "mako"
@@ -2085,7 +2087,7 @@ version = "2.34.2"
 description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.10"
-groups = ["main", "dev"]
+groups = ["dev"]
 files = [
     {file = "requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"},
     {file = "requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"},
@@ -3270,4 +3272,4 @@ dev = ["pytest", "setuptools"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13, <4.0"
-content-hash = "2e559f116acf19f08bdbe3271b02a38aee74d6fc9ad325ac4b63534ddb62050f"
+content-hash = "ebcc7a9d1a289f03f9198268f26f9c0ac6f01d3e08aeaa4dee7f4e9b6821f051"
